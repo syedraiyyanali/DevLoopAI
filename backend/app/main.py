@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.v1.router import api_router
 from app.core.config import settings
 
 
@@ -11,30 +12,21 @@ app = FastAPI(
 )
 
 
+app.include_router(
+    api_router,
+    prefix=settings.api_prefix,
+)
+
+
 @app.get("/", tags=["System"])
 async def root() -> dict[str, str]:
     """
-    Root endpoint for the DevLoopAI backend.
+    Return basic information about the DevLoopAI backend.
     """
     return {
         "message": f"{settings.app_name} is running",
         "version": settings.app_version,
         "environment": settings.environment,
         "docs": "/docs",
-    }
-
-
-@app.get("/health", tags=["System"])
-async def health_check() -> dict[str, str]:
-    """
-    Basic health-check endpoint.
-
-    Monitoring systems can use this endpoint to confirm
-    that the backend application is running.
-    """
-    return {
-        "status": "healthy",
-        "service": settings.app_name,
-        "version": settings.app_version,
-        "environment": settings.environment,
+        "api": settings.api_prefix,
     }
