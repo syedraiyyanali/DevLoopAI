@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5-coder:7b"
 
+    cors_origins: str = (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -28,13 +33,22 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """
+        Convert the comma-separated CORS origins into a clean list.
+        """
+        return [
+            origin.strip()
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
+
 
 @lru_cache
 def get_settings() -> Settings:
     """
     Create and cache the application settings.
-
-    Caching prevents the .env file from being read repeatedly.
     """
     return Settings()
 
