@@ -3,15 +3,15 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 16:57:26 +05:00
+Time: 16:58:30 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: c84a1fc - docs: refresh working details checkpoint
-Working Tree: frontend integration checkpoint ready to commit
-Last Push: c84a1fc pushed to origin/main
+Latest Commit: abed747 - feat: add frontend backend integration
+Working Tree: clean after frontend integration checkpoint, except this working-details refresh if uncommitted
+Last Push: abed747 pushed to origin/main
 
 ## Current Sprint
 
@@ -25,11 +25,11 @@ Status: COMPLETED
 
 ## Currently Working On
 
-Frontend backend integration checkpoint completed and ready to commit.
+Frontend backend integration checkpoint completed, committed, and pushed.
 
 ## Current Goal
 
-Commit and push the tested frontend integration checkpoint without breaking the backend API foundation.
+Keep the continuity document accurate after the frontend integration checkpoint.
 
 ## What Has Been Completed
 
@@ -131,7 +131,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/chat-panel.tsx` sends messages through `POST /api/v1/chat`.
   - `frontend/lib/api-client.ts` centralizes frontend API calls.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
-- Backend integration status: implemented locally and ready to commit.
+- Backend integration status: implemented, committed, and pushed.
 - Build/lint status:
   - `npm run build`: PASS
   - `npm run lint`: PASS
@@ -207,7 +207,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - Configured Ollama model `qwen2.5-coder:7b` is not installed locally.
 - Live chat generation cannot succeed until a model is installed.
-- Frontend integration checkpoint is ready to commit.
+- Frontend integration checkpoint is committed and pushed.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
 ## Problems Fixed Recently
@@ -220,6 +220,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Git Commits From Recent Work
 
+- abed747 - feat: add frontend backend integration
 - c84a1fc - docs: refresh working details checkpoint
 - 0570cee - docs: update working details status
 - 5f079d5 - docs: add Codex working details
@@ -235,16 +236,6 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `CODEX_WORKING_DETAILS.md`
-- `.gitignore`
-- `frontend/.gitignore`
-- `frontend/.env.example`
-- `frontend/app/layout.tsx`
-- `frontend/app/page.tsx`
-- `frontend/components/backend-status.tsx`
-- `frontend/components/chat-panel.tsx`
-- `frontend/components/ollama-status.tsx`
-- `frontend/lib/api-client.ts`
-- `frontend/lib/api-config.ts`
 
 ## Decisions Waiting for User
 
