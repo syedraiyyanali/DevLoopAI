@@ -25,6 +25,33 @@ export interface ChatResponse {
   model: string;
 }
 
+export interface WorkspaceMetadata {
+  name: string;
+  root_path: string;
+  total_visible_entries: number;
+}
+
+export interface WorkspaceEntry {
+  name: string;
+  relative_path: string;
+  kind: "directory" | "file";
+  size_bytes: number | null;
+}
+
+export interface WorkspaceListResponse {
+  workspace: WorkspaceMetadata;
+  relative_path: string;
+  entries: WorkspaceEntry[];
+}
+
+export interface WorkspaceFileContent {
+  workspace: WorkspaceMetadata;
+  relative_path: string;
+  content: string;
+  size_bytes: number;
+  truncated: boolean;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -170,4 +197,46 @@ function processStreamLine(
   if (event.type === "error") {
     throw new Error(event.message);
   }
+}
+
+export async function openWorkspace(path: string): Promise<WorkspaceMetadata> {
+  return requestJson<WorkspaceMetadata>("/workspace/open", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ path }),
+  });
+}
+
+export async function listWorkspace(
+  workspacePath: string,
+  relativePath = "",
+): Promise<WorkspaceListResponse> {
+  return requestJson<WorkspaceListResponse>("/workspace/list", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
+      relative_path: relativePath,
+    }),
+  });
+}
+
+export async function readWorkspaceFile(
+  workspacePath: string,
+  relativePath: string,
+): Promise<WorkspaceFileContent> {
+  return requestJson<WorkspaceFileContent>("/workspace/read", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
+      relative_path: relativePath,
+    }),
+  });
 }

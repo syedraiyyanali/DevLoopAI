@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 19:12:02 +05:00
+Time: 19:24:30 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: abed747 - feat: add frontend backend integration
-Working Tree: streaming changes verified; commit pending
-Last Push: abed747 pushed to origin/main
+Latest Commit: 5fb6fcb - feat: add streaming chat responses
+Working Tree: workspace foundation changes verified; commit pending
+Last Push: 5fb6fcb pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Streaming Chat
+Sprint: Sprint 1 - Project Workspace Foundation
 
 ## Current Step
 
-Step: Sprint 1 - Step 13: Streaming Chat Responses
+Step: Sprint 1 - Step 14: Read-Only Project Workspace Access
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added and verified end-to-end streaming chat responses from Ollama through FastAPI into the Next.js chat UI.
+Added and verified read-only local project workspace opening, listing, and safe text-file preview.
 
 ## Current Goal
 
-Commit the verified streaming chat checkpoint and push it to GitHub.
+Commit the verified project workspace foundation checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -75,6 +75,10 @@ Commit the verified streaming chat checkpoint and push it to GitHub.
 - Kept `POST /api/v1/chat` and frontend non-streaming chat fallback available.
 - Added tests for streaming endpoint success/error behavior and Ollama stream chunk parsing/failure handling.
 - Verified real browser frontend -> FastAPI -> Ollama streaming behavior with `qwen2.5-coder:7b`.
+- Added read-only backend workspace APIs for opening a local project folder, listing visible files/folders, and reading safe text files.
+- Added workspace safety protections for traversal, generated/heavy folders, secret-like files, binary files, non-UTF-8 files, and large files.
+- Added a minimal frontend Workspace panel for opening a local folder, browsing safe entries, and previewing text files.
+- Verified workspace APIs manually against a temporary project and verified the frontend workspace panel in headless Chrome.
 
 ## Current Architecture
 
@@ -120,18 +124,26 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `GET /api/v1/ollama/status`
   - `POST /api/v1/chat`
   - `POST /api/v1/chat/stream`
+  - `POST /api/v1/workspace/open`
+  - `POST /api/v1/workspace/list`
+  - `POST /api/v1/workspace/read`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
   - `OllamaService.generate_chat_response`
   - `OllamaService.stream_chat_response`
+  - `WorkspaceService.open_workspace`
+  - `WorkspaceService.list_directory`
+  - `WorkspaceService.read_text_file`
 - Tests implemented:
   - configuration tests
   - API foundation tests
   - Ollama status API tests
   - Ollama service tests
   - chat API tests
+  - workspace API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
+- Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
 
 ## Current Frontend Status
 
@@ -140,8 +152,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/app/page.tsx` is now a DevLoopAI workspace/status screen.
   - `frontend/components/backend-status.tsx` displays FastAPI health.
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
+  - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, and previews text files.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
-  - `frontend/lib/api-client.ts` centralizes frontend API calls and NDJSON stream parsing.
+  - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
 - Backend integration status: implemented, committed, and pushed.
 - Build/lint status:
@@ -204,7 +217,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 27 tests passed.
+- Backend pytest: PASS, 36 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -213,6 +226,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `GET /docs`: PASS.
 - `POST /api/v1/chat`: PASS with real Ollama response.
 - `POST /api/v1/chat/stream`: PASS with real Ollama stream chunks and final done event.
+- `POST /api/v1/workspace/open`: PASS with valid local folder metadata.
+- `POST /api/v1/workspace/list`: PASS with ignored folders and secret files excluded.
+- `POST /api/v1/workspace/read`: PASS with safe text-file content.
+- Workspace traversal blocking: PASS.
+- Workspace binary-file blocking: PASS.
+- Workspace large-file blocking: PASS.
 - Direct `ollama run qwen2.5-coder:7b`: PASS.
 - Direct `POST http://localhost:11434/api/generate`: PASS.
 - Next.js build: PASS.
@@ -228,12 +247,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Browser incremental assistant rendering: PASS.
 - Browser non-streaming fallback after stream startup failure: PASS.
 - Browser synthetic error state: PASS.
+- Headless browser workspace panel open/list/preview: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Streaming checkpoint is verified; commit/push pending.
+- Workspace foundation checkpoint is verified; commit/push pending.
 - Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
 - Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
 - Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
@@ -251,9 +271,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Fixed an ESLint hook-name false positive by renaming `useExample` to `selectExample`.
 - Browser verification initially exposed automation timing issues; no app source bug was found.
 - Added stream parsing safeguards for empty stream lines, malformed/non-object chunks, missing response fields, Ollama connection failures, HTTP failures, and interrupted streams.
+- Fixed workspace test fixture line-ending instability on Windows by writing test fixture bytes explicitly.
 
 ## Git Commits From Recent Work
 
+- 5fb6fcb - feat: add streaming chat responses
 - abed747 - feat: add frontend backend integration
 - c84a1fc - docs: refresh working details checkpoint
 - 0570cee - docs: update working details status
@@ -269,11 +291,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/chat.py`
-- `backend/app/services/ollama.py`
-- `backend/tests/test_chat_api.py`
-- `backend/tests/test_ollama_service.py`
-- `frontend/components/chat-panel.tsx`
+- `backend/app/api/v1/endpoints/workspace.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/models/workspace.py`
+- `backend/app/services/workspace.py`
+- `backend/tests/test_workspace_api.py`
+- `frontend/app/page.tsx`
+- `frontend/components/workspace-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
@@ -287,13 +311,15 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: improve persistent chat/message state or begin the first lightweight agent-planning foundation.
+Recommended next task: add a read-only project context summary endpoint or begin the first lightweight agent-planning foundation using the safe workspace service.
 
 ## Next Files Likely to Change
 
-- `frontend/components/chat-panel.tsx`
+- `backend/app/services/workspace.py`
+- `backend/app/api/v1/endpoints/workspace.py`
+- `frontend/components/workspace-panel.tsx`
 - `frontend/lib/api-client.ts`
-- backend chat/Ollama service files if streaming is started
+- New project context files if the workspace summary step begins
 
 ## Do Not Forget
 
@@ -307,4 +333,4 @@ Recommended next task: improve persistent chat/message state or begin the first 
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, then begin the next chat UX/streaming checkpoint.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the safe read-only workspace foundation.
