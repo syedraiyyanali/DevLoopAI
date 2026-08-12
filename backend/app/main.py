@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
+from app.api.v1.endpoints.system import router as system_router
 from app.core.config import settings
 
 
@@ -26,6 +27,8 @@ app.include_router(
     api_router,
     prefix=settings.api_prefix,
 )
+
+app.include_router(system_router)
 
 
 @app.get("/", tags=["System"])
