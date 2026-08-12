@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 18:30:16 +05:00
+Time: 18:52:28 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
 Latest Commit: abed747 - feat: add frontend backend integration
-Working Tree: chat UX checkpoint in progress; commit after verification
+Working Tree: clean after browser verification; working-details update pending if uncommitted
 Last Push: abed747 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Chat UX
+Sprint: Sprint 1 - Browser Verification
 
 ## Current Step
 
-Step: Sprint 1 - Step 11: Non-Streaming Chat UX
+Step: Sprint 1 - Step 12: Manual Browser Verification
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Improved the frontend non-streaming chat experience.
+Verified the frontend manually through a headless Chrome browser against clean FastAPI and Next.js dev servers.
 
 ## Current Goal
 
-Commit and push the tested chat UX checkpoint.
+Record browser verification results; no source fixes were required.
 
 ## What Has Been Completed
 
@@ -68,6 +68,7 @@ Commit and push the tested chat UX checkpoint.
 - User installed `qwen2.5-coder:7b` into `D:\OllamaModels`.
 - Verified direct Ollama generation and DevLoopAI `POST /api/v1/chat` generation.
 - Reworked the chat panel into a conversation-style UI with message history, example prompts, clear action, loading state, and better errors.
+- Stopped stale Next.js process on port 3000, restarted backend/frontend cleanly, and verified browser interactions end to end.
 
 ## Current Architecture
 
@@ -138,7 +139,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Build/lint status:
   - `npm run build`: PASS
   - `npm run lint`: PASS
-  - temporary Next.js dev server smoke test: previously PASS; current smoke blocked by an already-running unresponsive dev server on port 3000.
+  - headless Chrome browser interaction test: PASS.
 
 ## Ollama / AI Status
 
@@ -208,13 +209,19 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Next.js build: PASS.
 - ESLint: PASS.
 - Live backend `POST /api/v1/chat`: PASS with `qwen2.5-coder:7b`.
+- Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
+- Browser example prompts: PASS.
+- Browser conversation history: PASS.
+- Browser Clear button: PASS.
+- Browser loading state: PASS.
+- Browser synthetic error state: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
 - Frontend integration checkpoint is committed and pushed.
-- A Next.js dev server process was already running on port 3000 and did not respond before timeout during smoke verification; build/lint still pass.
+- A stale Next.js dev server process was found on port 3000 and stopped during browser verification.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
 ## Problems Fixed Recently
@@ -226,6 +233,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Added mocked tests so Ollama service behavior does not depend on local model installation.
 - Installed configured Ollama model on D drive and verified real generation.
 - Fixed an ESLint hook-name false positive by renaming `useExample` to `selectExample`.
+- Browser verification initially exposed automation timing issues; no app source bug was found.
 
 ## Git Commits From Recent Work
 
@@ -245,7 +253,6 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `CODEX_WORKING_DETAILS.md`
-- `frontend/components/chat-panel.tsx`
 
 ## Decisions Waiting for User
 
@@ -257,7 +264,7 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: stop/restart the existing Next.js dev server if needed, manually test chat in the browser, then begin streaming responses.
+Recommended next task: begin streaming chat responses or improve persistent chat/message state.
 
 ## Next Files Likely to Change
 
@@ -277,4 +284,4 @@ Recommended next task: stop/restart the existing Next.js dev server if needed, m
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, then start backend and frontend together to manually test real chat in the browser or begin the next chat UX/streaming checkpoint.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then begin the next chat UX/streaming checkpoint.
