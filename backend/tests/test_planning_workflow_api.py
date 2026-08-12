@@ -7,6 +7,7 @@ from app.main import app
 from app.models.planner import PlannerProjectContext, PlannerResponse
 from app.models.reviewer import ReviewerResponse
 from app.models.validator import ValidatorResponse
+from app.services.planning_approval import planning_approval_store
 
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -173,6 +174,11 @@ def test_planning_workflow_returns_planner_reviewer_and_final_summary(monkeypatc
             "Final execution readiness: READY_WITH_WARNINGS."
         ),
     }
+    assert body["approval"]["status"] == "PENDING_APPROVAL"
+    assert body["approval"]["approval_allowed"] is True
+    assert len(body["approval"]["approval_id"]) > 10
+    assert len(body["approval"]["approval_token"]) > 20
+    assert len(body["approval"]["plan_fingerprint"]) == 64
 
 
 def test_planning_workflow_supports_approve_and_ready(monkeypatch):
@@ -193,8 +199,10 @@ def test_planning_workflow_supports_approve_and_ready(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["final_reviewed_summary"]["final_recommendation"] == "READY"
-    assert response.json()["final_reviewed_summary"]["execution_ready"] is True
-    assert response.json()["final_reviewed_summary"]["user_approval_required"] is False
+    assert response.json()["final_reviewed_summary"]["execution_ready"] is False
+    assert response.json()["final_reviewed_summary"]["user_approval_required"] is True
+    assert response.json()["approval"]["status"] == "PENDING_APPROVAL"
+    assert response.json()["approval"]["approval_allowed"] is True
 
 
 def test_planning_workflow_supports_approve_with_changes_and_warnings(monkeypatch):
@@ -237,7 +245,9 @@ def test_planning_workflow_reviewer_reject_forces_blocked(monkeypatch):
     assert "Reviewer rejected the planner output." in response.json()[
         "final_reviewed_summary"
     ]["blockers"]
-    assert response.json()["final_reviewed_summary"]["user_approval_required"] is True
+    assert response.json()["final_reviewed_summary"]["user_approval_required"] is False
+    assert response.json()["approval"]["status"] == "BLOCKED"
+    assert response.json()["approval"]["approval_allowed"] is False
 
 
 def test_planning_workflow_supports_blocked_validation(monkeypatch):
@@ -259,6 +269,8 @@ def test_planning_workflow_supports_blocked_validation(monkeypatch):
     assert response.json()["final_reviewed_summary"]["final_execution_readiness"] == (
         "Execution is blocked; do not execute until blockers are resolved."
     )
+    assert response.json()["approval"]["status"] == "BLOCKED"
+    assert response.json()["approval"]["approval_allowed"] is False
 
 
 def test_planning_workflow_accepts_project_context(monkeypatch):
@@ -366,3 +378,267 @@ def test_planning_workflow_rejects_invalid_workspace():
     assert response.json()["error"]["message"] == (
         "Workspace path must be an existing directory"
     )
+
+
+def test_planning_workflow_allows_valid_explicit_approval(monkeypatch):
+    async def mock_approve(self: ReviewerAgent, request) -> ReviewerResponse:
+        return reviewer_response("APPROVE")
+
+    async def mock_ready(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("READY")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_approve)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_ready)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+
+    response = client.post(
+        "/api/v1/workflows/planning/approve",
+        json={
+            "approval_id": approval["approval_id"],
+            "approval_token": approval["approval_token"],
+            "plan_fingerprint": approval["plan_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "APPROVED"
+    assert response.json()["message"] == "Plan approved. No code was executed."
+
+
+def test_planning_workflow_allows_explicit_rejection(monkeypatch):
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_validate_plan)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+
+    response = client.post(
+        "/api/v1/workflows/planning/reject",
+        json={
+            "approval_id": approval["approval_id"],
+            "approval_token": approval["approval_token"],
+            "plan_fingerprint": approval["plan_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "REJECTED"
+    assert response.json()["message"] == "Plan rejected. No code was executed."
+
+
+def test_planning_workflow_blocks_approval_when_validator_blocks(monkeypatch):
+    async def mock_blocked(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("BLOCKED")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_blocked)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+
+    response = client.post(
+        "/api/v1/workflows/planning/approve",
+        json={
+            "approval_id": approval["approval_id"],
+            "approval_token": approval["approval_token"],
+            "plan_fingerprint": approval["plan_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "Validator blocked the reviewed plan."
+
+
+def test_planning_workflow_blocks_approval_when_reviewer_rejects(monkeypatch):
+    async def mock_reject(self: ReviewerAgent, request) -> ReviewerResponse:
+        return reviewer_response("REJECT")
+
+    async def mock_ready(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("READY")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_reject)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_ready)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+
+    response = client.post(
+        "/api/v1/workflows/planning/approve",
+        json={
+            "approval_id": approval["approval_id"],
+            "approval_token": approval["approval_token"],
+            "plan_fingerprint": approval["plan_fingerprint"],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "Reviewer rejected the planner output."
+
+
+def test_planning_workflow_rejects_stale_changed_plan_approval(monkeypatch):
+    async def mock_approve(self: ReviewerAgent, request) -> ReviewerResponse:
+        return reviewer_response("APPROVE")
+
+    async def mock_ready(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("READY")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_approve)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_ready)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+
+    response = client.post(
+        "/api/v1/workflows/planning/approve",
+        json={
+            "approval_id": approval["approval_id"],
+            "approval_token": approval["approval_token"],
+            "plan_fingerprint": "0" * 64,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == (
+        "Approval does not match the current reviewed plan."
+    )
+
+
+def test_planning_workflow_rejects_invalid_approval_id_or_token():
+    response = client.post(
+        "/api/v1/workflows/planning/approve",
+        json={
+            "approval_id": "missing",
+            "approval_token": "bad-token",
+            "plan_fingerprint": "0" * 64,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == "Approval id or token is invalid."
+
+
+def test_planning_workflow_repeated_approval_is_idempotent(monkeypatch):
+    async def mock_approve(self: ReviewerAgent, request) -> ReviewerResponse:
+        return reviewer_response("APPROVE")
+
+    async def mock_ready(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("READY")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_approve)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_ready)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+    payload = {
+        "approval_id": approval["approval_id"],
+        "approval_token": approval["approval_token"],
+        "plan_fingerprint": approval["plan_fingerprint"],
+    }
+
+    first_response = client.post("/api/v1/workflows/planning/approve", json=payload)
+    second_response = client.post("/api/v1/workflows/planning/approve", json=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert second_response.json()["status"] == "APPROVED"
+    assert second_response.json()["message"] == "Plan is already approved."
+
+
+def test_planning_workflow_repeated_rejection_is_idempotent(monkeypatch):
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_validate_plan)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+    payload = {
+        "approval_id": approval["approval_id"],
+        "approval_token": approval["approval_token"],
+        "plan_fingerprint": approval["plan_fingerprint"],
+    }
+
+    first_response = client.post("/api/v1/workflows/planning/reject", json=payload)
+    second_response = client.post("/api/v1/workflows/planning/reject", json=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert second_response.json()["status"] == "REJECTED"
+    assert second_response.json()["message"] == "Plan is already rejected."
+
+
+def test_planning_workflow_cannot_reject_after_approval(monkeypatch):
+    async def mock_approve(self: ReviewerAgent, request) -> ReviewerResponse:
+        return reviewer_response("APPROVE")
+
+    async def mock_ready(self: ValidatorAgent, request) -> ValidatorResponse:
+        return validator_response("READY")
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_approve)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_ready)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    approval = workflow_response.json()["approval"]
+    payload = {
+        "approval_id": approval["approval_id"],
+        "approval_token": approval["approval_token"],
+        "plan_fingerprint": approval["plan_fingerprint"],
+    }
+
+    approve_response = client.post("/api/v1/workflows/planning/approve", json=payload)
+    reject_response = client.post("/api/v1/workflows/planning/reject", json=payload)
+
+    assert approve_response.status_code == 200
+    assert reject_response.status_code == 409
+    assert reject_response.json()["error"]["message"] == (
+        "Approved plans cannot be rejected here."
+    )
+
+
+def test_planning_approval_fingerprint_changes_when_plan_changes():
+    first_fingerprint = planning_approval_store.plan_fingerprint(
+        planner_output=planner_response(),
+        reviewer_output=reviewer_response("APPROVE"),
+        validator_output=validator_response("READY"),
+    )
+    changed_planner = planner_response()
+    changed_planner.implementation_steps.append("Add a second label.")
+    changed_fingerprint = planning_approval_store.plan_fingerprint(
+        planner_output=changed_planner,
+        reviewer_output=reviewer_response("APPROVE"),
+        validator_output=validator_response("READY"),
+    )
+
+    assert first_fingerprint != changed_fingerprint

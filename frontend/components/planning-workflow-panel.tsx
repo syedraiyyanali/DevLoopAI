@@ -4,7 +4,10 @@ import { FormEvent, useState } from "react";
 
 import {
   ApiError,
+  approvePlanningWorkflow,
+  rejectPlanningWorkflow,
   runPlanningWorkflow,
+  type PlanningApprovalActionResponse,
   type PlanningWorkflowResponse,
 } from "../lib/api-client";
 
@@ -21,9 +24,13 @@ export default function PlanningWorkflowPanel() {
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>({
     status: "idle",
   });
+  const [approvalResult, setApprovalResult] =
+    useState<PlanningApprovalActionResponse | null>(null);
+  const [approvalError, setApprovalError] = useState("");
+  const [isApprovalLoading, setIsApprovalLoading] = useState(false);
 
   const isLoading = workflowStatus.status === "loading";
-  const canRun = task.trim().length > 0 && !isLoading;
+  const canRun = task.trim().length > 0 && !isLoading && !isApprovalLoading;
 
   async function handleRunWorkflow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +46,8 @@ export default function PlanningWorkflowPanel() {
     }
 
     setWorkflowStatus({ status: "loading" });
+    setApprovalResult(null);
+    setApprovalError("");
 
     try {
       const workflow = await runPlanningWorkflow(
@@ -72,6 +81,28 @@ export default function PlanningWorkflowPanel() {
     }
 
     return "Unable to run the planning workflow.";
+  }
+
+  async function handleApprovalAction(action: "approve" | "reject") {
+    if (workflowStatus.status !== "ready") {
+      return;
+    }
+
+    setIsApprovalLoading(true);
+    setApprovalError("");
+
+    try {
+      const result =
+        action === "approve"
+          ? await approvePlanningWorkflow(workflowStatus.workflow.approval)
+          : await rejectPlanningWorkflow(workflowStatus.workflow.approval);
+
+      setApprovalResult(result);
+    } catch (error: unknown) {
+      setApprovalError(getWorkflowErrorMessage(error));
+    } finally {
+      setIsApprovalLoading(false);
+    }
   }
 
   return (
@@ -156,7 +187,7 @@ export default function PlanningWorkflowPanel() {
               {workflowStatus.workflow.final_reviewed_summary.final_recommendation}
               {workflowStatus.workflow.final_reviewed_summary.user_approval_required
                 ? " - User approval required"
-                : " - Ready for approval-free execution later"}
+                : " - Approval blocked until blockers are resolved"}
             </p>
             <p className="text-xs leading-5 text-zinc-600">
               {
@@ -164,7 +195,57 @@ export default function PlanningWorkflowPanel() {
                   .final_execution_readiness
               }
             </p>
+            <p className="text-xs leading-5 text-zinc-600">
+              Approval status:{" "}
+              {approvalResult?.status ?? workflowStatus.workflow.approval.status}
+              {" - "}
+              {approvalResult?.message ?? workflowStatus.workflow.approval.reason}
+            </p>
+            <p className="text-xs leading-5 text-zinc-500">
+              Approval only records your decision for this exact reviewed plan;
+              it does not execute code or modify files.
+            </p>
           </div>
+
+          <div className="mt-4 flex flex-col gap-3 border-t border-zinc-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-zinc-500">
+              Plan fingerprint:{" "}
+              {workflowStatus.workflow.approval.plan_fingerprint.slice(0, 12)}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="inline-flex h-9 w-fit items-center justify-center rounded-md bg-emerald-700 px-3 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                disabled={
+                  isApprovalLoading ||
+                  !workflowStatus.workflow.approval.approval_allowed ||
+                  approvalResult?.status === "APPROVED" ||
+                  approvalResult?.status === "REJECTED"
+                }
+                type="button"
+                onClick={() => void handleApprovalAction("approve")}
+              >
+                {isApprovalLoading ? "Saving..." : "Approve plan"}
+              </button>
+              <button
+                className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+                disabled={
+                  isApprovalLoading ||
+                  approvalResult?.status === "APPROVED" ||
+                  approvalResult?.status === "REJECTED"
+                }
+                type="button"
+                onClick={() => void handleApprovalAction("reject")}
+              >
+                Reject plan
+              </button>
+            </div>
+          </div>
+
+          {approvalError ? (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm leading-6 text-amber-900">{approvalError}</p>
+            </div>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-1 gap-4 text-sm lg:grid-cols-2">
             <WorkflowList

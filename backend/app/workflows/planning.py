@@ -9,6 +9,7 @@ from app.models.planning_workflow import (
 )
 from app.models.reviewer import ReviewerRequest, ReviewerResponse
 from app.models.validator import ValidationStatus, ValidatorRequest, ValidatorResponse
+from app.services.planning_approval import PlanningApprovalStore
 from app.models.workspace import WorkspaceContextSummary
 from app.services.workspace import WorkspaceService
 
@@ -30,11 +31,13 @@ class PlanningWorkflow:
         reviewer_agent: ReviewerAgent,
         validator_agent: ValidatorAgent,
         workspace_service: WorkspaceService,
+        approval_store: PlanningApprovalStore,
     ) -> None:
         self.planner_agent = planner_agent
         self.reviewer_agent = reviewer_agent
         self.validator_agent = validator_agent
         self.workspace_service = workspace_service
+        self.approval_store = approval_store
 
     async def run(
         self,
@@ -108,14 +111,22 @@ class PlanningWorkflow:
         except ValidatorAgentError as exc:
             raise PlanningWorkflowError(f"Validator failed: {exc}") from exc
 
+        final_reviewed_summary = self._final_summary(
+            planner_output=planner_output,
+            reviewer_output=reviewer_output,
+            validator_output=validator_output,
+        )
+
         return PlanningWorkflowResponse(
             planner_output=planner_output,
             reviewer_output=reviewer_output,
             validator_output=validator_output,
-            final_reviewed_summary=self._final_summary(
+            final_reviewed_summary=final_reviewed_summary,
+            approval=self.approval_store.create_gate(
                 planner_output=planner_output,
                 reviewer_output=reviewer_output,
                 validator_output=validator_output,
+                blockers=final_reviewed_summary.blockers,
             ),
         )
 
@@ -191,11 +202,8 @@ class PlanningWorkflow:
             *reviewer_output.testing_gaps,
             *validator_output.test_verification_readiness,
         ]
-        execution_ready = final_status == "READY"
-        user_approval_required = (
-            reviewer_output.approval_recommendation != "APPROVE"
-            or final_status != "READY"
-        )
+        execution_ready = False
+        user_approval_required = final_status != "BLOCKED"
 
         return FinalReviewedPlanSummary(
             final_recommendation=final_status,

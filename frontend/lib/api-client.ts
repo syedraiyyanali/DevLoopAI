@@ -153,11 +153,35 @@ export interface FinalReviewedPlanSummary {
   summary: string;
 }
 
+export type ApprovalStatus =
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "BLOCKED";
+
+export interface PlanningApprovalGate {
+  approval_id: string;
+  approval_token: string;
+  plan_fingerprint: string;
+  status: ApprovalStatus;
+  approval_allowed: boolean;
+  reason: string;
+}
+
+export interface PlanningApprovalActionResponse {
+  approval_id: string;
+  plan_fingerprint: string;
+  status: ApprovalStatus;
+  approval_allowed: boolean;
+  message: string;
+}
+
 export interface PlanningWorkflowResponse {
   planner_output: PlannerResponse;
   reviewer_output: ReviewerResponse;
   validator_output: ValidatorResponse;
   final_reviewed_summary: FinalReviewedPlanSummary;
+  approval: PlanningApprovalGate;
 }
 
 type ChatStreamEvent =
@@ -413,6 +437,38 @@ export async function runPlanningWorkflow(
       task,
       workspace_path: workspacePath || null,
       constraints,
+    }),
+  });
+}
+
+export async function approvePlanningWorkflow(
+  approval: PlanningApprovalGate,
+): Promise<PlanningApprovalActionResponse> {
+  return requestJson<PlanningApprovalActionResponse>("/workflows/planning/approve", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      approval_id: approval.approval_id,
+      approval_token: approval.approval_token,
+      plan_fingerprint: approval.plan_fingerprint,
+    }),
+  });
+}
+
+export async function rejectPlanningWorkflow(
+  approval: PlanningApprovalGate,
+): Promise<PlanningApprovalActionResponse> {
+  return requestJson<PlanningApprovalActionResponse>("/workflows/planning/reject", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      approval_id: approval.approval_id,
+      approval_token: approval.approval_token,
+      plan_fingerprint: approval.plan_fingerprint,
     }),
   });
 }

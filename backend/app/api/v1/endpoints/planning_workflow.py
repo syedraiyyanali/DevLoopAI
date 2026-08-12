@@ -6,10 +6,18 @@ from app.agents.reviewer import ReviewerAgent
 from app.agents.validator import ValidatorAgent
 from app.core.config import settings
 from app.models.planning_workflow import (
+    PlanningApprovalActionRequest,
+    PlanningApprovalActionResponse,
     PlanningWorkflowRequest,
     PlanningWorkflowResponse,
 )
 from app.services.ollama import OllamaService
+from app.services.planning_approval import (
+    PlanningApprovalBlockedError,
+    PlanningApprovalNotFoundError,
+    PlanningApprovalStaleError,
+    planning_approval_store,
+)
 from app.services.workspace import WorkspaceNotFoundError, WorkspaceService
 from app.workflows.planning import PlanningWorkflow, PlanningWorkflowError
 
@@ -42,6 +50,7 @@ async def run_planning_workflow(
             workspace_service=workspace_service,
         ),
         workspace_service=workspace_service,
+        approval_store=planning_approval_store,
     )
 
     try:
@@ -54,5 +63,75 @@ async def run_planning_workflow(
     except PlanningWorkflowError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/approve",
+    response_model=PlanningApprovalActionResponse,
+    summary="Explicitly approve a reviewed planning workflow",
+    description="Mark an exact reviewed plan as approved without executing code.",
+)
+async def approve_planning_workflow(
+    request: PlanningApprovalActionRequest,
+) -> PlanningApprovalActionResponse:
+    """
+    Explicitly approve an exact reviewed plan. This remains read-only.
+    """
+    try:
+        return planning_approval_store.approve(
+            approval_id=request.approval_id,
+            approval_token=request.approval_token,
+            plan_fingerprint=request.plan_fingerprint,
+        )
+    except PlanningApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except PlanningApprovalStaleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except PlanningApprovalBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/reject",
+    response_model=PlanningApprovalActionResponse,
+    summary="Explicitly reject a reviewed planning workflow",
+    description="Mark an exact reviewed plan as rejected without executing code.",
+)
+async def reject_planning_workflow(
+    request: PlanningApprovalActionRequest,
+) -> PlanningApprovalActionResponse:
+    """
+    Explicitly reject an exact reviewed plan. This remains read-only.
+    """
+    try:
+        return planning_approval_store.reject(
+            approval_id=request.approval_id,
+            approval_token=request.approval_token,
+            plan_fingerprint=request.plan_fingerprint,
+        )
+    except PlanningApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except PlanningApprovalStaleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except PlanningApprovalBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc

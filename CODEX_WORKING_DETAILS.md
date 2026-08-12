@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 20:53:00 +05:00
+Time: 21:22:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: c450faa - feat: integrate validator into planning workflow
-Working Tree: clean after Step 20 checkpoint
-Last Push: c450faa pushed to origin/main
+Latest Commit: 9737311 - docs: update step 20 working details
+Working Tree: approval gate changes verified; commit pending
+Last Push: 9737311 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Planning Workflow Validator Integration
+Sprint: Sprint 1 - Explicit Approval Gate
 
 ## Current Step
 
-Step: Sprint 1 - Step 20: Validator-Integrated Planning Workflow
+Step: Sprint 1 - Step 21: Explicit User Approval Gate
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Integrated Validator Agent into the combined read-only Planning Workflow.
+Added an explicit read-only user approval gate before any future execution workflow.
 
 ## Current Goal
 
-Step 20 Planning Workflow checkpoint committed and pushed to GitHub.
+Commit the verified Step 21 approval-gate checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -129,6 +129,17 @@ Step 20 Planning Workflow checkpoint committed and pushed to GitHub.
 - Updated the frontend Planning Workflow panel to show Validator readiness, blockers, warnings, and final execution readiness.
 - Added `.tmp-chrome-*/` to `.gitignore` for generated browser smoke-test profiles.
 - Verified real Planner -> Reviewer -> Validator planning workflow call against Ollama with DevLoopAI workspace context.
+- Added explicit planning workflow approval statuses: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, and `BLOCKED`.
+- Added a process-local approval session store with opaque approval IDs, approval tokens, and SHA-256 plan fingerprints.
+- Planning Workflow now returns an `approval` gate object tied to the exact planner/reviewer/validator outputs.
+- Added `POST /api/v1/workflows/planning/approve` for explicit read-only user approval.
+- Added `POST /api/v1/workflows/planning/reject` for explicit read-only user rejection.
+- Approval is blocked when Reviewer returns `REJECT`, Validator returns `BLOCKED`, or workflow blockers remain.
+- Approval attempts with a changed/stale plan fingerprint now return a conflict instead of approving.
+- Repeated approval and rejection are idempotent in the safe direction.
+- Approval itself does not execute code, modify files, or start a Coding Agent.
+- Planning Workflow results now keep `execution_ready: false` until a future execution system checks explicit approval.
+- Updated the frontend Planning Workflow panel to show approval status, plan fingerprint, and explicit Approve/Reject controls.
 
 ## Current Architecture
 
@@ -182,6 +193,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/agents/reviewer`
   - `POST /api/v1/agents/validator`
   - `POST /api/v1/workflows/planning`
+  - `POST /api/v1/workflows/planning/approve`
+  - `POST /api/v1/workflows/planning/reject`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
@@ -195,6 +208,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `ReviewerAgent.review_plan`
   - `ValidatorAgent.validate_plan`
   - `PlanningWorkflow.run`
+  - `PlanningApprovalStore.create_gate`
+  - `PlanningApprovalStore.approve`
+  - `PlanningApprovalStore.reject`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -212,7 +228,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planner Agent status: backend can produce read-only structured implementation plans using Ollama and safe project context summaries.
 - Reviewer Agent status: backend can critique planner output in read-only mode and return validated approval recommendations.
 - Validator Agent status: backend can validate reviewed plans in read-only mode before any future execution.
-- Planning Workflow status: backend can orchestrate read-only Planner -> Reviewer -> Validator and return a final execution decision.
+- Planning Workflow status: backend can orchestrate read-only Planner -> Reviewer -> Validator, return a final execution decision, and require explicit user approval before any future execution.
 
 ## Current Frontend Status
 
@@ -224,7 +240,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, previews text files, and displays a compact project context summary.
   - `frontend/components/planner-panel.tsx` submits read-only planning requests and displays structured planner output.
   - `frontend/components/reviewer-panel.tsx` submits planner JSON for read-only review and displays structured reviewer output.
-  - `frontend/components/planning-workflow-panel.tsx` runs the combined read-only planning workflow and displays final execution readiness, blockers, warnings, required changes, risks, tests, planner steps, and Validator readiness.
+  - `frontend/components/planning-workflow-panel.tsx` runs the combined read-only planning workflow and displays final execution readiness, approval status, explicit Approve/Reject controls, blockers, warnings, required changes, risks, tests, planner steps, and Validator readiness.
   - `frontend/components/validator-panel.tsx` validates pasted planner/reviewer JSON and displays structured readiness output.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
@@ -255,6 +271,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Reviewer Agent is implemented in read-only mode.
 - Validator Agent is implemented in read-only mode.
 - Combined Planning Workflow now runs Planner -> Reviewer -> Validator and returns a final read-only execution decision.
+- Explicit user approval gate is implemented for reviewed/validated plans in read-only mode.
 - Planned future agents include Coding, Improvement, Security, Performance, Documentation, WordPress, WooCommerce, Shopify, PHP, JavaScript, HTML/CSS, and API agents.
 - Execution/coding agents should wait until approval gates, audit logging, and read-only workflow confidence are stronger.
 
@@ -294,7 +311,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 75 tests passed.
+- Backend pytest: PASS, 85 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -331,6 +348,17 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planning workflow reviewer failure handling: PASS with clear `502`.
 - Planning workflow validator failure handling: PASS with clear `502`.
 - Planning workflow invalid workspace handling: PASS with clear `404`.
+- Planning workflow approval gate creation: PASS with `PENDING_APPROVAL` for approvable plans.
+- Planning workflow approval blocked by Reviewer `REJECT`: PASS.
+- Planning workflow approval blocked by Validator `BLOCKED`: PASS.
+- `POST /api/v1/workflows/planning/approve`: PASS for valid approval.
+- `POST /api/v1/workflows/planning/reject`: PASS for valid rejection.
+- Planning workflow stale/changed plan approval blocking: PASS with `409`.
+- Planning workflow invalid approval ID/token blocking: PASS with `404`.
+- Planning workflow repeated approval behavior: PASS, idempotent after approval.
+- Planning workflow repeated rejection behavior: PASS, idempotent after rejection.
+- Planning workflow reject-after-approval blocking: PASS with `409`.
+- Planning workflow fingerprint changes when plan output changes: PASS.
 - `POST /api/v1/agents/validator`: PASS with mocked `READY` result.
 - Validator `READY_WITH_WARNINGS` result: PASS.
 - Validator `BLOCKED` result: PASS.
@@ -353,6 +381,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live backend `POST /api/v1/agents/planner`: PASS with real Ollama response using DevLoopAI workspace context.
 - Live backend `POST /api/v1/agents/reviewer`: PASS with real Ollama response reviewing real planner output.
 - Live backend `POST /api/v1/workflows/planning`: PASS with real Ollama planner, reviewer, and validator responses; returned final `READY_WITH_WARNINGS`, `execution_ready: false`, and no blockers for the smoke task.
+- Live backend `POST /api/v1/workflows/planning/approve`: PASS against the exact live workflow approval ID/token/fingerprint; returned `APPROVED` and `Plan approved. No code was executed.`
+- Live backend approval-gate state before approval: PASS with `PENDING_APPROVAL`, `approval_allowed: true`, and `execution_ready: false`.
 - Live backend `POST /api/v1/agents/validator`: PASS with real Ollama validation after real planner/reviewer outputs.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
 - Headless browser frontend -> FastAPI -> Ollama streaming chat flow: PASS.
@@ -368,6 +398,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Headless browser Planner panel submit/render flow: PASS.
 - Headless browser Reviewer panel submit/render flow: PASS.
 - Browser Planning Workflow panel static render: PASS, updated UI copy and Validator Agent workflow form present.
+- Browser Planning Workflow approval UI static render: PASS after frontend build/lint; explicit controls are implemented in the result state.
 - Headless browser Planning Workflow panel submit/render flow: PASS after Step 20 update.
 - Headless browser Validator panel submit/render flow: PASS.
 - Git diff whitespace check: PASS for committed backend work.
@@ -375,7 +406,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Known Problems
 
 - None currently blocking.
-- Step 20 Planning Workflow checkpoint is verified, committed, and pushed.
+- Step 21 approval-gate checkpoint is verified; commit/push pending.
+- Browser approval automation with real Ollama workflow timed out after the backend completed the workflow; API approval flow passed, frontend build/lint passed, and the temporary browser script was removed.
 - Initial pytest command used system Python from the repo root and failed because pytest/app imports were unavailable there; reran successfully with `backend\.venv\Scripts\python.exe` from `backend`.
 - First backend dev-server health wait missed the server startup; captured Uvicorn logs confirmed the server was running on `127.0.0.1:8000`.
 - Temporary browser smoke-test script initially required an unavailable `ws` package; switched to Node's built-in WebSocket client.
@@ -408,6 +440,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live Validator test blocked a model plan with incorrect file paths, confirming deterministic path checks are useful.
 - Planning Workflow Step 20 now prevents Reviewer `REJECT` from ever being summarized as execution-ready.
 - Planning Workflow Step 20 now preserves Validator `BLOCKED` as a hard final block.
+- Step 21 fixed a semantics issue where `READY` validation briefly set `execution_ready: true`; workflow responses now keep `execution_ready: false` until explicit approval can be consumed by a future execution layer.
 
 ## Git Commits From Recent Work
 
@@ -434,9 +467,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `.gitignore`
 - `backend/app/api/v1/endpoints/planning_workflow.py`
 - `backend/app/models/planning_workflow.py`
+- `backend/app/services/planning_approval.py`
 - `backend/app/workflows/planning.py`
 - `backend/tests/test_planning_workflow_api.py`
 - `frontend/components/planning-workflow-panel.tsx`
@@ -453,13 +486,13 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add persisted read-only planning workflow history or an explicit approval gate for future execution workflows.
+Recommended next task: add persisted planning workflow history/audit trail so approval sessions survive backend restarts.
 
 ## Next Files Likely to Change
 
 - backend workflow/history models and services
 - backend workflow/history API endpoints
-- frontend Planning Workflow history or approval-gate UI
+- frontend Planning Workflow history UI
 - `frontend/lib/api-client.ts`
 
 ## Do Not Forget

@@ -1,9 +1,14 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.models.planner import PlannerResponse
 from app.models.reviewer import ReviewerResponse
 from app.models.validator import ValidationStatus, ValidatorResponse
 from app.models.workspace import WorkspaceContextSummary
+
+
+ApprovalStatus = Literal["PENDING_APPROVAL", "APPROVED", "REJECTED", "BLOCKED"]
 
 
 class PlanningWorkflowModelOverrides(BaseModel):
@@ -43,6 +48,18 @@ class FinalReviewedPlanSummary(BaseModel):
     summary: str
 
 
+class PlanningApprovalGate(BaseModel):
+    """
+    Read-only user approval state for the exact reviewed plan.
+    """
+    approval_id: str
+    approval_token: str
+    plan_fingerprint: str
+    status: ApprovalStatus
+    approval_allowed: bool
+    reason: str
+
+
 class PlanningWorkflowResponse(BaseModel):
     """
     Complete read-only Planner -> Reviewer -> Validator workflow result.
@@ -51,3 +68,24 @@ class PlanningWorkflowResponse(BaseModel):
     reviewer_output: ReviewerResponse
     validator_output: ValidatorResponse
     final_reviewed_summary: FinalReviewedPlanSummary
+    approval: PlanningApprovalGate
+
+
+class PlanningApprovalActionRequest(BaseModel):
+    """
+    Request body for explicit approval/rejection of a reviewed plan.
+    """
+    approval_id: str = Field(..., min_length=1)
+    approval_token: str = Field(..., min_length=1)
+    plan_fingerprint: str = Field(..., min_length=1)
+
+
+class PlanningApprovalActionResponse(BaseModel):
+    """
+    Response body after an explicit approval-gate action.
+    """
+    approval_id: str
+    plan_fingerprint: str
+    status: ApprovalStatus
+    approval_allowed: bool
+    message: str
