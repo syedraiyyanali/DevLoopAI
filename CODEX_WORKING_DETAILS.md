@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 18:17:14 +05:00
+Time: 18:30:16 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
 Latest Commit: abed747 - feat: add frontend backend integration
-Working Tree: clean before Ollama verification; working-details update pending if uncommitted
+Working Tree: chat UX checkpoint in progress; commit after verification
 Last Push: abed747 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Ollama Verification
+Sprint: Sprint 1 - Chat UX
 
 ## Current Step
 
-Step: Sprint 1 - Step 10: Real Ollama Chat Verification
+Step: Sprint 1 - Step 11: Non-Streaming Chat UX
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Verified the configured Ollama model and real backend chat generation.
+Improved the frontend non-streaming chat experience.
 
 ## Current Goal
 
-Record that real local Ollama generation now works through DevLoopAI.
+Commit and push the tested chat UX checkpoint.
 
 ## What Has Been Completed
 
@@ -67,6 +67,7 @@ Record that real local Ollama generation now works through DevLoopAI.
 - Derived the API docs link from `NEXT_PUBLIC_API_BASE_URL` instead of hardcoding a local URL.
 - User installed `qwen2.5-coder:7b` into `D:\OllamaModels`.
 - Verified direct Ollama generation and DevLoopAI `POST /api/v1/chat` generation.
+- Reworked the chat panel into a conversation-style UI with message history, example prompts, clear action, loading state, and better errors.
 
 ## Current Architecture
 
@@ -130,14 +131,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/app/page.tsx` is now a DevLoopAI workspace/status screen.
   - `frontend/components/backend-status.tsx` displays FastAPI health.
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
-  - `frontend/components/chat-panel.tsx` sends messages through `POST /api/v1/chat`.
+  - `frontend/components/chat-panel.tsx` sends messages through `POST /api/v1/chat` and keeps a local conversation history.
   - `frontend/lib/api-client.ts` centralizes frontend API calls.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
 - Backend integration status: implemented, committed, and pushed.
 - Build/lint status:
   - `npm run build`: PASS
   - `npm run lint`: PASS
-  - temporary Next.js dev server smoke test: PASS
+  - temporary Next.js dev server smoke test: previously PASS; current smoke blocked by an already-running unresponsive dev server on port 3000.
 
 ## Ollama / AI Status
 
@@ -206,12 +207,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Direct `POST http://localhost:11434/api/generate`: PASS.
 - Next.js build: PASS.
 - ESLint: PASS.
+- Live backend `POST /api/v1/chat`: PASS with `qwen2.5-coder:7b`.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
 - Frontend integration checkpoint is committed and pushed.
+- A Next.js dev server process was already running on port 3000 and did not respond before timeout during smoke verification; build/lint still pass.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
 ## Problems Fixed Recently
@@ -222,6 +225,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Normalized `backend/requirements.txt` to UTF-8 so Git/tooling can read it properly.
 - Added mocked tests so Ollama service behavior does not depend on local model installation.
 - Installed configured Ollama model on D drive and verified real generation.
+- Fixed an ESLint hook-name false positive by renaming `useExample` to `selectExample`.
 
 ## Git Commits From Recent Work
 
@@ -241,6 +245,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `CODEX_WORKING_DETAILS.md`
+- `frontend/components/chat-panel.tsx`
 
 ## Decisions Waiting for User
 
@@ -252,7 +257,7 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: run the frontend and backend together for manual browser testing, then improve chat UX or begin streaming responses.
+Recommended next task: stop/restart the existing Next.js dev server if needed, manually test chat in the browser, then begin streaming responses.
 
 ## Next Files Likely to Change
 
