@@ -122,6 +122,21 @@ export interface ReviewerResponse {
   raw_model_response: string | null;
 }
 
+export interface FinalReviewedPlanSummary {
+  final_recommendation: ReviewRecommendation;
+  required_changes_before_execution: string[];
+  risks: string[];
+  tests_expected: string[];
+  user_approval_required: boolean;
+  summary: string;
+}
+
+export interface PlanningWorkflowResponse {
+  planner_output: PlannerResponse;
+  reviewer_output: ReviewerResponse;
+  final_reviewed_summary: FinalReviewedPlanSummary;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -356,6 +371,24 @@ export async function reviewPlannerOutput(
     body: JSON.stringify({
       task,
       planner_output: plannerOutput,
+      constraints,
+    }),
+  });
+}
+
+export async function runPlanningWorkflow(
+  task: string,
+  workspacePath?: string,
+  constraints: string[] = [],
+): Promise<PlanningWorkflowResponse> {
+  return requestJson<PlanningWorkflowResponse>("/workflows/planning", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      task,
+      workspace_path: workspacePath || null,
       constraints,
     }),
   });
