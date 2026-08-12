@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 16:47:13 +05:00
+Time: 16:57:26 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: 0570cee - docs: update working details status
-Working Tree: continuity file committed; local uncommitted frontend/gitignore changes remain
-Last Push: 0570cee pushed to origin/main
+Latest Commit: c84a1fc - docs: refresh working details checkpoint
+Working Tree: frontend integration checkpoint ready to commit
+Last Push: c84a1fc pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Backend/Foundation
+Sprint: Sprint 1 - Frontend/Foundation Integration
 
 ## Current Step
 
-Step: Sprint 1 - Step 8: Backend Chat API
+Step: Sprint 1 - Step 9: Frontend Backend Integration
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Creating this persistent continuity document. No feature implementation is currently in progress.
+Frontend backend integration checkpoint completed and ready to commit.
 
 ## Current Goal
 
-Preserve the actual current DevLoopAI project state so future Codex sessions can resume quickly and safely.
+Commit and push the tested frontend integration checkpoint without breaking the backend API foundation.
 
 ## What Has Been Completed
 
@@ -46,6 +46,7 @@ Preserve the actual current DevLoopAI project state so future Codex sessions can
 - Ollama status service and API added.
 - Basic non-streaming backend chat API added.
 - Backend pytest coverage added for configuration, API foundation, error handling, Ollama status, and chat API behavior.
+- Persistent `CODEX_WORKING_DETAILS.md` continuity document added.
 
 ## What Was Completed in the Last Work Session
 
@@ -58,7 +59,12 @@ Preserve the actual current DevLoopAI project state so future Codex sessions can
 - Normalized `backend/requirements.txt` from UTF-16 to UTF-8.
 - Verified FastAPI, pytest, Next.js build, and ESLint.
 - Pushed backend checkpoints to GitHub.
-- Created this `CODEX_WORKING_DETAILS.md` continuity file and committed it.
+- Created and pushed `CODEX_WORKING_DETAILS.md`.
+- Began frontend integration using the existing local `frontend/lib` and `frontend/components` files.
+- Replaced the starter Next.js page with a DevLoopAI workspace/status screen.
+- Added frontend panels for backend status, Ollama status, and non-streaming chat.
+- Added frontend API error parsing so backend error messages appear in the UI.
+- Derived the API docs link from `NEXT_PUBLIC_API_BASE_URL` instead of hardcoding a local URL.
 
 ## Current Architecture
 
@@ -119,13 +125,17 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - Next.js status: project builds successfully.
 - Pages/components implemented:
-  - default `frontend/app/page.tsx` still appears to be the starter page.
-  - uncommitted `frontend/components/backend-status.tsx` exists locally.
-  - uncommitted `frontend/lib/api-client.ts` and `frontend/lib/api-config.ts` exist locally.
-- Backend integration status: local uncommitted frontend files appear to start a backend health integration, but they are not yet committed.
+  - `frontend/app/page.tsx` is now a DevLoopAI workspace/status screen.
+  - `frontend/components/backend-status.tsx` displays FastAPI health.
+  - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
+  - `frontend/components/chat-panel.tsx` sends messages through `POST /api/v1/chat`.
+  - `frontend/lib/api-client.ts` centralizes frontend API calls.
+  - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
+- Backend integration status: implemented locally and ready to commit.
 - Build/lint status:
   - `npm run build`: PASS
   - `npm run lint`: PASS
+  - temporary Next.js dev server smoke test: PASS
 
 ## Ollama / AI Status
 
@@ -197,12 +207,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - Configured Ollama model `qwen2.5-coder:7b` is not installed locally.
 - Live chat generation cannot succeed until a model is installed.
-- Local working tree still has uncommitted frontend/gitignore changes:
-  - `.gitignore`
-  - `frontend/.gitignore`
-  - `frontend/.env.example`
-  - `frontend/components/`
-  - `frontend/lib/`
+- Frontend integration checkpoint is ready to commit.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
 ## Problems Fixed Recently
@@ -215,6 +220,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Git Commits From Recent Work
 
+- c84a1fc - docs: refresh working details checkpoint
 - 0570cee - docs: update working details status
 - 5f079d5 - docs: add Codex working details
 - a26a797 - feat: add backend chat API
@@ -229,11 +235,21 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `CODEX_WORKING_DETAILS.md`
+- `.gitignore`
+- `frontend/.gitignore`
+- `frontend/.env.example`
+- `frontend/app/layout.tsx`
+- `frontend/app/page.tsx`
+- `frontend/components/backend-status.tsx`
+- `frontend/components/chat-panel.tsx`
+- `frontend/components/ollama-status.tsx`
+- `frontend/lib/api-client.ts`
+- `frontend/lib/api-config.ts`
 
 ## Decisions Waiting for User
 
 - Decide whether to install/pull `qwen2.5-coder:7b` now, or change `DEVLOOPAI_OLLAMA_MODEL` to a smaller installed model after one is available.
-- Decide whether the next checkpoint should finish/commit the existing frontend backend-status integration or continue backend-only work.
+None.
 
 ## Information Needed From User
 
@@ -247,18 +263,12 @@ ollama pull qwen2.5-coder:7b
 
 ## Next Planned Task
 
-Recommended next task: install or choose an available Ollama model, verify real `POST /api/v1/chat` generation, then move to frontend integration for backend/Ollama/chat status.
+Recommended next task after this checkpoint: install or choose an available Ollama model and verify real `POST /api/v1/chat` generation from both backend and frontend.
 
 ## Next Files Likely to Change
 
-- `frontend/app/page.tsx`
-- `frontend/components/backend-status.tsx`
-- `frontend/lib/api-client.ts`
-- `frontend/lib/api-config.ts`
-- `frontend/.env.example`
-- `.gitignore`
-- `frontend/.gitignore`
-- possibly `backend/.env.example` if the configured model changes
+- possibly `backend/.env.example` if the configured Ollama model changes
+- possibly frontend chat UX files if real model generation changes the expected UI behavior
 
 ## Do Not Forget
 
@@ -272,4 +282,4 @@ Recommended next task: install or choose an available Ollama model, verify real 
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, inspect only the files relevant to the next task, then either install/verify the configured Ollama model or continue the existing frontend backend-status integration.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, finish committing the frontend integration checkpoint if it is still uncommitted, then install/verify an Ollama model for real chat generation.
