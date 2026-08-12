@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import ollama, system
+from app.api.v1.endpoints import chat, ollama, system
 
 
 api_router = APIRouter()
@@ -13,4 +13,9 @@ api_router.include_router(
 api_router.include_router(
     ollama.router,
     tags=["Ollama"],
+)
+
+api_router.include_router(
+    chat.router,
+    tags=["Chat"],
 )
