@@ -25,6 +25,11 @@ export interface ChatResponse {
   model: string;
 }
 
+type ChatStreamEvent =
+  | { type: "chunk"; content: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
 interface ApiErrorBody {
   error?: {
     message?: string;
@@ -89,4 +94,80 @@ export async function sendChatMessage(message: string): Promise<ChatResponse> {
     },
     body: JSON.stringify({ message }),
   });
+}
+
+export async function streamChatMessage(
+  message: string,
+  onChunk: (chunk: string) => void,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: "POST",
+    headers: {
+      Accept: "application/x-ndjson",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await getErrorMessage(response), response.status);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response body is unavailable.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    buffer = processStreamBuffer(buffer, onChunk);
+  }
+
+  buffer += decoder.decode();
+  processStreamBuffer(buffer, onChunk);
+}
+
+function processStreamBuffer(
+  buffer: string,
+  onChunk: (chunk: string) => void,
+): string {
+  const lines = buffer.split("\n");
+  const remainingBuffer = lines.pop() ?? "";
+
+  for (const line of lines) {
+    processStreamLine(line, onChunk);
+  }
+
+  return remainingBuffer;
+}
+
+function processStreamLine(
+  line: string,
+  onChunk: (chunk: string) => void,
+): void {
+  const trimmedLine = line.trim();
+
+  if (!trimmedLine) {
+    return;
+  }
+
+  const event = JSON.parse(trimmedLine) as ChatStreamEvent;
+
+  if (event.type === "chunk" && event.content) {
+    onChunk(event.content);
+    return;
+  }
+
+  if (event.type === "error") {
+    throw new Error(event.message);
+  }
 }

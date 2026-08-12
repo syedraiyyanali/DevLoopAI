@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 18:52:28 +05:00
+Time: 19:12:02 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
 Latest Commit: abed747 - feat: add frontend backend integration
-Working Tree: clean after browser verification; working-details update pending if uncommitted
+Working Tree: streaming changes verified; commit pending
 Last Push: abed747 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Browser Verification
+Sprint: Sprint 1 - Streaming Chat
 
 ## Current Step
 
-Step: Sprint 1 - Step 12: Manual Browser Verification
+Step: Sprint 1 - Step 13: Streaming Chat Responses
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Verified the frontend manually through a headless Chrome browser against clean FastAPI and Next.js dev servers.
+Added and verified end-to-end streaming chat responses from Ollama through FastAPI into the Next.js chat UI.
 
 ## Current Goal
 
-Record browser verification results; no source fixes were required.
+Commit the verified streaming chat checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -69,6 +69,12 @@ Record browser verification results; no source fixes were required.
 - Verified direct Ollama generation and DevLoopAI `POST /api/v1/chat` generation.
 - Reworked the chat panel into a conversation-style UI with message history, example prompts, clear action, loading state, and better errors.
 - Stopped stale Next.js process on port 3000, restarted backend/frontend cleanly, and verified browser interactions end to end.
+- Added backend NDJSON streaming chat support through `POST /api/v1/chat/stream`.
+- Added Ollama streaming service support using `/api/generate` with `stream: true`.
+- Added frontend stream parsing and incremental assistant message rendering.
+- Kept `POST /api/v1/chat` and frontend non-streaming chat fallback available.
+- Added tests for streaming endpoint success/error behavior and Ollama stream chunk parsing/failure handling.
+- Verified real browser frontend -> FastAPI -> Ollama streaming behavior with `qwen2.5-coder:7b`.
 
 ## Current Architecture
 
@@ -113,17 +119,19 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `GET /api/v1/health`
   - `GET /api/v1/ollama/status`
   - `POST /api/v1/chat`
+  - `POST /api/v1/chat/stream`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
   - `OllamaService.generate_chat_response`
+  - `OllamaService.stream_chat_response`
 - Tests implemented:
   - configuration tests
   - API foundation tests
   - Ollama status API tests
   - Ollama service tests
   - chat API tests
-- Ollama integration status: backend can check Ollama and generate real non-streaming chat responses with `qwen2.5-coder:7b`.
+- Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 
 ## Current Frontend Status
 
@@ -132,8 +140,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/app/page.tsx` is now a DevLoopAI workspace/status screen.
   - `frontend/components/backend-status.tsx` displays FastAPI health.
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
-  - `frontend/components/chat-panel.tsx` sends messages through `POST /api/v1/chat` and keeps a local conversation history.
-  - `frontend/lib/api-client.ts` centralizes frontend API calls.
+  - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
+  - `frontend/lib/api-client.ts` centralizes frontend API calls and NDJSON stream parsing.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
 - Backend integration status: implemented, committed, and pushed.
 - Build/lint status:
@@ -196,7 +204,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 21 tests passed.
+- Backend pytest: PASS, 27 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -204,24 +212,32 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `GET /api/v1/ollama/status`: PASS.
 - `GET /docs`: PASS.
 - `POST /api/v1/chat`: PASS with real Ollama response.
+- `POST /api/v1/chat/stream`: PASS with real Ollama stream chunks and final done event.
 - Direct `ollama run qwen2.5-coder:7b`: PASS.
 - Direct `POST http://localhost:11434/api/generate`: PASS.
 - Next.js build: PASS.
 - ESLint: PASS.
 - Live backend `POST /api/v1/chat`: PASS with `qwen2.5-coder:7b`.
+- Live backend `POST /api/v1/chat/stream`: PASS with streamed chunks `Streaming` and ` ready`, then `done`.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
+- Headless browser frontend -> FastAPI -> Ollama streaming chat flow: PASS.
 - Browser example prompts: PASS.
 - Browser conversation history: PASS.
 - Browser Clear button: PASS.
 - Browser loading state: PASS.
+- Browser incremental assistant rendering: PASS.
+- Browser non-streaming fallback after stream startup failure: PASS.
 - Browser synthetic error state: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Frontend integration checkpoint is committed and pushed.
-- A stale Next.js dev server process was found on port 3000 and stopped during browser verification.
+- Streaming checkpoint is verified; commit/push pending.
+- Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
+- Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
+- Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
+- A stale Next.js dev server process was found on port 3000 and stopped during earlier browser verification.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
 ## Problems Fixed Recently
@@ -234,6 +250,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Installed configured Ollama model on D drive and verified real generation.
 - Fixed an ESLint hook-name false positive by renaming `useExample` to `selectExample`.
 - Browser verification initially exposed automation timing issues; no app source bug was found.
+- Added stream parsing safeguards for empty stream lines, malformed/non-object chunks, missing response fields, Ollama connection failures, HTTP failures, and interrupted streams.
 
 ## Git Commits From Recent Work
 
@@ -252,6 +269,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
+- `backend/app/api/v1/endpoints/chat.py`
+- `backend/app/services/ollama.py`
+- `backend/tests/test_chat_api.py`
+- `backend/tests/test_ollama_service.py`
+- `frontend/components/chat-panel.tsx`
+- `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -264,7 +287,7 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: begin streaming chat responses or improve persistent chat/message state.
+Recommended next task: improve persistent chat/message state or begin the first lightweight agent-planning foundation.
 
 ## Next Files Likely to Change
 

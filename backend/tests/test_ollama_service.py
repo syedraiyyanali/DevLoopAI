@@ -3,13 +3,29 @@ import pytest
 
 from app.core.config import Settings
 from app.models.chat import ChatRequest
-from app.services.ollama import OllamaService, OllamaServiceError
+from app.services.ollama import (
+    OllamaService,
+    OllamaServiceError,
+    OllamaStreamError,
+)
 
 
 class MockResponse:
-    def __init__(self, payload: dict, status_code: int = 200) -> None:
+    def __init__(
+        self,
+        payload: dict,
+        status_code: int = 200,
+        lines: list[str] | None = None,
+    ) -> None:
         self.payload = payload
         self.status_code = status_code
+        self.lines = lines or []
+
+    async def __aenter__(self) -> "MockResponse":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
 
     def json(self) -> dict:
         return self.payload
@@ -23,6 +39,10 @@ class MockResponse:
                 request=request,
                 response=response,
             )
+
+    async def aiter_lines(self):
+        for line in self.lines:
+            yield line
 
 
 class MockAsyncClient:
@@ -53,6 +73,18 @@ class MockAsyncClient:
         return self.response
 
     async def post(self, url: str, json: dict) -> MockResponse:
+        self.__class__.last_post_url = url
+        self.__class__.last_post_json = json
+
+        if self.error is not None:
+            raise self.error
+
+        if self.response is None:
+            raise AssertionError("MockAsyncClient.response was not configured")
+
+        return self.response
+
+    def stream(self, method: str, url: str, json: dict) -> "MockAsyncClient":
         self.__class__.last_post_url = url
         self.__class__.last_post_json = json
 
@@ -191,3 +223,86 @@ async def test_generate_chat_response_raises_service_error_for_invalid_payload()
 
     with pytest.raises(OllamaServiceError, match="invalid generation response"):
         await build_service().generate_chat_response(ChatRequest(message="Hello"))
+
+
+@pytest.mark.anyio
+async def test_stream_chat_response_yields_text_chunks():
+    MockAsyncClient.response = MockResponse(
+        {},
+        lines=[
+            '{"response":"Hello","done":false}',
+            "",
+            '{"response":" from stream","done":false}',
+            '{"done":true}',
+        ],
+    )
+
+    chunks = [
+        chunk
+        async for chunk in build_service().stream_chat_response(
+            ChatRequest(message="Hello")
+        )
+    ]
+
+    assert chunks == ["Hello", " from stream"]
+    assert MockAsyncClient.last_post_url == "http://localhost:11434/api/generate"
+    assert MockAsyncClient.last_post_json == {
+        "model": "qwen2.5-coder:7b",
+        "prompt": "Hello",
+        "stream": True,
+    }
+
+
+@pytest.mark.anyio
+async def test_stream_chat_response_ignores_empty_or_malformed_data_shapes():
+    MockAsyncClient.response = MockResponse(
+        {},
+        lines=[
+            '{"response":"","done":false}',
+            '{"message":"missing response"}',
+            '["not", "a", "dict"]',
+            '{"response":"Valid chunk","done":false}',
+        ],
+    )
+
+    chunks = [
+        chunk
+        async for chunk in build_service().stream_chat_response(
+            ChatRequest(message="Hello")
+        )
+    ]
+
+    assert chunks == ["Valid chunk"]
+
+
+@pytest.mark.anyio
+async def test_stream_chat_response_raises_service_error_for_bad_json():
+    MockAsyncClient.response = MockResponse(
+        {},
+        lines=[
+            '{"response":"Hello","done":false}',
+            "{bad json",
+        ],
+    )
+
+    with pytest.raises(OllamaStreamError, match="malformed stream response"):
+        [
+            chunk
+            async for chunk in build_service().stream_chat_response(
+                ChatRequest(message="Hello")
+            )
+        ]
+
+
+@pytest.mark.anyio
+async def test_stream_chat_response_raises_service_error_for_connection_failure():
+    request = httpx2.Request("POST", "http://localhost:11434/api/generate")
+    MockAsyncClient.error = httpx2.ConnectError("connection refused", request=request)
+
+    with pytest.raises(OllamaStreamError, match="Unable to connect"):
+        [
+            chunk
+            async for chunk in build_service().stream_chat_response(
+                ChatRequest(message="Hello")
+            )
+        ]

@@ -2,7 +2,11 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
-import { ApiError, sendChatMessage } from "../lib/api-client";
+import {
+  ApiError,
+  sendChatMessage,
+  streamChatMessage,
+} from "../lib/api-client";
 
 type ChatMessage = {
   id: number;
@@ -49,31 +53,53 @@ export default function ChatPanel() {
       role: "user",
       content: trimmedMessage,
     };
+    const assistantMessageId = nextMessageId + 1;
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: "assistant",
+      content: "",
+      model: "qwen2.5-coder:7b",
+    };
 
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      userMessage,
+      assistantMessage,
+    ]);
     setMessage("");
     setChatStatus({ status: "sending" });
+    let receivedStreamingContent = false;
 
     try {
-      const response = await sendChatMessage(trimmedMessage);
+      await streamChatMessage(trimmedMessage, (chunk) => {
+        receivedStreamingContent = true;
+        appendAssistantChunk(assistantMessageId, chunk);
+      });
 
-      const assistantMessage: ChatMessage = {
-        id: nextMessageId + 1,
-        role: "assistant",
-        content: response.message,
-        model: response.model,
-      };
+      if (!receivedStreamingContent) {
+        await completeWithFallback(trimmedMessage, assistantMessageId);
+      }
 
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        assistantMessage,
-      ]);
       setChatStatus({ status: "idle" });
     } catch (error: unknown) {
+      if (!receivedStreamingContent) {
+        try {
+          await completeWithFallback(trimmedMessage, assistantMessageId);
+          setChatStatus({ status: "idle" });
+          return;
+        } catch (fallbackError: unknown) {
+          setChatStatus({
+            status: "error",
+            message: getChatErrorMessage(fallbackError),
+          });
+          return;
+        }
+      }
+
       const errorMessage =
-        error instanceof ApiError
-          ? `${error.message} HTTP status: ${error.status}.`
-          : "Unable to send the chat request.";
+        error instanceof Error
+          ? `Stream interrupted: ${error.message}`
+          : "Stream interrupted before completion.";
 
       setChatStatus({
         status: "error",
@@ -99,6 +125,50 @@ export default function ChatPanel() {
     setMessages([]);
     setMessage("");
     setChatStatus({ status: "idle" });
+  }
+
+  function appendAssistantChunk(assistantMessageId: number, chunk: string) {
+    setMessages((currentMessages) =>
+      currentMessages.map((chatMessage) =>
+        chatMessage.id === assistantMessageId
+          ? {
+              ...chatMessage,
+              content: `${chatMessage.content}${chunk}`,
+            }
+          : chatMessage,
+      ),
+    );
+  }
+
+  async function completeWithFallback(
+    trimmedMessage: string,
+    assistantMessageId: number,
+  ) {
+    const response = await sendChatMessage(trimmedMessage);
+
+    setMessages((currentMessages) =>
+      currentMessages.map((chatMessage) =>
+        chatMessage.id === assistantMessageId
+          ? {
+              ...chatMessage,
+              content: response.message,
+              model: response.model,
+            }
+          : chatMessage,
+      ),
+    );
+  }
+
+  function getChatErrorMessage(error: unknown): string {
+    if (error instanceof ApiError) {
+      return `${error.message} HTTP status: ${error.status}.`;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return "Unable to send the chat request.";
   }
 
   return (
@@ -175,10 +245,10 @@ export default function ChatPanel() {
               </li>
             ))}
 
-            {isSending ? (
+            {isSending && messages[messages.length - 1]?.content === "" ? (
               <li className="flex justify-start">
                 <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
-                  Generating response...
+                  Connecting to stream...
                 </div>
               </li>
             ) : null}
@@ -214,7 +284,7 @@ export default function ChatPanel() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-zinc-500">
-            Non-streaming chat is active; streaming comes later.
+            Streaming chat is active; non-streaming fallback remains available.
           </p>
           <button
             className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"

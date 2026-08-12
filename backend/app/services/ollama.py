@@ -1,4 +1,6 @@
 import logging
+import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx2
@@ -14,6 +16,12 @@ logger = logging.getLogger(__name__)
 class OllamaServiceError(Exception):
     """
     Raised when Ollama cannot complete a service request.
+    """
+
+
+class OllamaStreamError(Exception):
+    """
+    Raised when Ollama streaming cannot continue.
     """
 
 
@@ -94,6 +102,55 @@ class OllamaService:
 
         return ChatResponse(message=generated_text, model=model)
 
+    async def stream_chat_response(
+        self,
+        chat_request: ChatRequest,
+    ) -> AsyncIterator[str]:
+        """
+        Stream generated response text chunks through Ollama.
+        """
+        model = chat_request.model or self.configured_model
+        generate_url = f"{self.base_url}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": chat_request.message,
+            "stream": True,
+        }
+
+        try:
+            async with httpx2.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    generate_url,
+                    json=payload,
+                ) as response:
+                    response.raise_for_status()
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+
+                        chunk = self._parse_stream_line(line)
+
+                        if chunk is None:
+                            continue
+
+                        yield chunk
+        except httpx2.HTTPStatusError as exc:
+            logger.warning(
+                "Ollama stream request failed: status_code=%s",
+                exc.response.status_code,
+            )
+            raise OllamaStreamError(
+                "Ollama could not stream a response for the requested model"
+            ) from exc
+        except httpx2.HTTPError as exc:
+            logger.warning("Ollama stream request failed: %s", exc)
+            raise OllamaStreamError("Unable to connect to Ollama") from exc
+        except json.JSONDecodeError as exc:
+            logger.warning("Ollama returned malformed stream JSON: %s", exc)
+            raise OllamaStreamError("Ollama returned a malformed stream response") from exc
+
     def _parse_models(self, payload: dict[str, Any]) -> list[OllamaModelInfo]:
         """
         Convert Ollama's model list payload into DevLoopAI's API model shape.
@@ -115,3 +172,22 @@ class OllamaService:
                 models.append(OllamaModelInfo(name=name))
 
         return models
+
+    def _parse_stream_line(self, line: str) -> str | None:
+        """
+        Parse a single Ollama streaming JSON line into a response chunk.
+        """
+        data = json.loads(line)
+
+        if not isinstance(data, dict):
+            return None
+
+        if data.get("done") is True:
+            return None
+
+        chunk = data.get("response")
+
+        if not isinstance(chunk, str) or not chunk:
+            return None
+
+        return chunk
