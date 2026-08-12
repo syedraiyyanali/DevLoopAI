@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 16:58:30 +05:00
+Time: 18:17:14 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
 Latest Commit: abed747 - feat: add frontend backend integration
-Working Tree: clean after frontend integration checkpoint, except this working-details refresh if uncommitted
+Working Tree: clean before Ollama verification; working-details update pending if uncommitted
 Last Push: abed747 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Frontend/Foundation Integration
+Sprint: Sprint 1 - Ollama Verification
 
 ## Current Step
 
-Step: Sprint 1 - Step 9: Frontend Backend Integration
+Step: Sprint 1 - Step 10: Real Ollama Chat Verification
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Frontend backend integration checkpoint completed, committed, and pushed.
+Verified the configured Ollama model and real backend chat generation.
 
 ## Current Goal
 
-Keep the continuity document accurate after the frontend integration checkpoint.
+Record that real local Ollama generation now works through DevLoopAI.
 
 ## What Has Been Completed
 
@@ -65,6 +65,8 @@ Keep the continuity document accurate after the frontend integration checkpoint.
 - Added frontend panels for backend status, Ollama status, and non-streaming chat.
 - Added frontend API error parsing so backend error messages appear in the UI.
 - Derived the API docs link from `NEXT_PUBLIC_API_BASE_URL` instead of hardcoding a local URL.
+- User installed `qwen2.5-coder:7b` into `D:\OllamaModels`.
+- Verified direct Ollama generation and DevLoopAI `POST /api/v1/chat` generation.
 
 ## Current Architecture
 
@@ -119,7 +121,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - Ollama status API tests
   - Ollama service tests
   - chat API tests
-- Ollama integration status: backend can check Ollama and call `/api/generate`, but real chat generation needs the configured model installed locally.
+- Ollama integration status: backend can check Ollama and generate real non-streaming chat responses with `qwen2.5-coder:7b`.
 
 ## Current Frontend Status
 
@@ -140,9 +142,10 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Ollama / AI Status
 
 - Ollama local server status: reachable at `http://localhost:11434`.
-- `GET http://localhost:11434/api/tags`: returns `200` with `{"models":[]}`.
+- `GET http://localhost:11434/api/tags`: returns `200` and includes `qwen2.5-coder:7b`.
 - Configured model: `qwen2.5-coder:7b`.
-- Known limitation: configured model is not currently installed, so live `POST /api/v1/chat` returns a clean `503`.
+- Model storage: `D:\OllamaModels`.
+- Live `POST /api/v1/chat`: returns `200` with a real model response.
 - Services implemented:
   - status check through `/api/tags`
   - non-streaming generation through `/api/generate`
@@ -198,15 +201,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `GET /api/v1/health`: PASS.
 - `GET /api/v1/ollama/status`: PASS.
 - `GET /docs`: PASS.
-- `POST /api/v1/chat`: PASS for clean error behavior; returned expected `503` because configured model is missing.
+- `POST /api/v1/chat`: PASS with real Ollama response.
+- Direct `ollama run qwen2.5-coder:7b`: PASS.
+- Direct `POST http://localhost:11434/api/generate`: PASS.
 - Next.js build: PASS.
 - ESLint: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
-- Configured Ollama model `qwen2.5-coder:7b` is not installed locally.
-- Live chat generation cannot succeed until a model is installed.
+- None currently blocking.
 - Frontend integration checkpoint is committed and pushed.
 - FastAPI route introspection in this FastAPI version shows included routers as `_IncludedRouter`; rely on tests/smoke checks for route verification.
 
@@ -217,6 +221,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Fixed deprecated Starlette 422 constant warning in the custom validation handler.
 - Normalized `backend/requirements.txt` to UTF-8 so Git/tooling can read it properly.
 - Added mocked tests so Ollama service behavior does not depend on local model installation.
+- Installed configured Ollama model on D drive and verified real generation.
 
 ## Git Commits From Recent Work
 
@@ -239,27 +244,21 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Decisions Waiting for User
 
-- Decide whether to install/pull `qwen2.5-coder:7b` now, or change `DEVLOOPAI_OLLAMA_MODEL` to a smaller installed model after one is available.
 None.
 
 ## Information Needed From User
 
-No credentials or account access needed.
-
-Optional manual action for real chat generation:
-
-```powershell
-ollama pull qwen2.5-coder:7b
-```
+None.
 
 ## Next Planned Task
 
-Recommended next task after this checkpoint: install or choose an available Ollama model and verify real `POST /api/v1/chat` generation from both backend and frontend.
+Recommended next task: run the frontend and backend together for manual browser testing, then improve chat UX or begin streaming responses.
 
 ## Next Files Likely to Change
 
-- possibly `backend/.env.example` if the configured Ollama model changes
-- possibly frontend chat UX files if real model generation changes the expected UI behavior
+- `frontend/components/chat-panel.tsx`
+- `frontend/lib/api-client.ts`
+- backend chat/Ollama service files if streaming is started
 
 ## Do Not Forget
 
@@ -273,4 +272,4 @@ Recommended next task after this checkpoint: install or choose an available Olla
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, finish committing the frontend integration checkpoint if it is still uncommitted, then install/verify an Ollama model for real chat generation.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then start backend and frontend together to manually test real chat in the browser or begin the next chat UX/streaming checkpoint.
