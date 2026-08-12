@@ -122,21 +122,6 @@ export interface ReviewerResponse {
   raw_model_response: string | null;
 }
 
-export interface FinalReviewedPlanSummary {
-  final_recommendation: ReviewRecommendation;
-  required_changes_before_execution: string[];
-  risks: string[];
-  tests_expected: string[];
-  user_approval_required: boolean;
-  summary: string;
-}
-
-export interface PlanningWorkflowResponse {
-  planner_output: PlannerResponse;
-  reviewer_output: ReviewerResponse;
-  final_reviewed_summary: FinalReviewedPlanSummary;
-}
-
 export type ValidationStatus = "READY" | "READY_WITH_WARNINGS" | "BLOCKED";
 
 export interface ValidatorResponse {
@@ -153,6 +138,26 @@ export interface ValidatorResponse {
   final_execution_readiness: string;
   model: string;
   raw_model_response: string | null;
+}
+
+export interface FinalReviewedPlanSummary {
+  final_recommendation: ValidationStatus;
+  final_execution_readiness: string;
+  execution_ready: boolean;
+  required_changes_before_execution: string[];
+  blockers: string[];
+  warnings: string[];
+  risks: string[];
+  tests_expected: string[];
+  user_approval_required: boolean;
+  summary: string;
+}
+
+export interface PlanningWorkflowResponse {
+  planner_output: PlannerResponse;
+  reviewer_output: ReviewerResponse;
+  validator_output: ValidatorResponse;
+  final_reviewed_summary: FinalReviewedPlanSummary;
 }
 
 type ChatStreamEvent =

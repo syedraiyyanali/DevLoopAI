@@ -3,6 +3,7 @@ from starlette import status
 
 from app.agents.planner import PlannerAgent
 from app.agents.reviewer import ReviewerAgent
+from app.agents.validator import ValidatorAgent
 from app.core.config import settings
 from app.models.planning_workflow import (
     PlanningWorkflowRequest,
@@ -26,7 +27,7 @@ async def run_planning_workflow(
     request: PlanningWorkflowRequest,
 ) -> PlanningWorkflowResponse:
     """
-    Run the read-only Planner -> Reviewer workflow.
+    Run the read-only Planner -> Reviewer -> Validator workflow.
     """
     workspace_service = WorkspaceService()
     ollama_service = OllamaService(settings)
@@ -36,6 +37,10 @@ async def run_planning_workflow(
             workspace_service=workspace_service,
         ),
         reviewer_agent=ReviewerAgent(ollama_service=ollama_service),
+        validator_agent=ValidatorAgent(
+            ollama_service=ollama_service,
+            workspace_service=workspace_service,
+        ),
         workspace_service=workspace_service,
     )
 

@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 20:36:52 +05:00
+Time: 20:53:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: 946eb90 - feat: add planning workflow foundation
-Working Tree: validator agent changes verified; commit pending
-Last Push: 946eb90 pushed to origin/main
+Latest Commit: 0e9ee10 - feat: add validator agent foundation
+Working Tree: planning workflow validator integration verified; commit pending
+Last Push: 0e9ee10 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Validator Agent Foundation
+Sprint: Sprint 1 - Planning Workflow Validator Integration
 
 ## Current Step
 
-Step: Sprint 1 - Step 19: Read-Only Validator Agent
+Step: Sprint 1 - Step 20: Validator-Integrated Planning Workflow
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added and verified a read-only Validator Agent that validates reviewed implementation plans before any future execution.
+Integrated Validator Agent into the combined read-only Planning Workflow.
 
 ## Current Goal
 
-Commit the verified Validator Agent checkpoint and push it to GitHub.
+Commit the verified Step 20 Planning Workflow checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -120,6 +120,15 @@ Commit the verified Validator Agent checkpoint and push it to GitHub.
 - Added malformed model output and Ollama error handling for Validator Agent.
 - Added a minimal frontend Validator panel for pasting planner/reviewer JSON and rendering validation output.
 - Verified real context -> planner -> reviewer -> validator flow against Ollama.
+- Integrated `ValidatorAgent` into `POST /api/v1/workflows/planning`.
+- Planning Workflow now orchestrates Planner -> Reviewer -> Validator through the service layer.
+- Planning Workflow response now returns planner output, reviewer output, validator output, final execution readiness, blockers, warnings, required changes, risks, expected tests, and user approval requirement.
+- Reviewer `REJECT` now forces the workflow final decision to `BLOCKED` even if a mocked or future validator response is permissive.
+- Validator `BLOCKED` now forces `execution_ready: false` and a blocked readiness message.
+- Added per-agent `validator` model override support in planning workflow requests.
+- Updated the frontend Planning Workflow panel to show Validator readiness, blockers, warnings, and final execution readiness.
+- Added `.tmp-chrome-*/` to `.gitignore` for generated browser smoke-test profiles.
+- Verified real Planner -> Reviewer -> Validator planning workflow call against Ollama with DevLoopAI workspace context.
 
 ## Current Architecture
 
@@ -203,7 +212,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planner Agent status: backend can produce read-only structured implementation plans using Ollama and safe project context summaries.
 - Reviewer Agent status: backend can critique planner output in read-only mode and return validated approval recommendations.
 - Validator Agent status: backend can validate reviewed plans in read-only mode before any future execution.
-- Planning Workflow status: backend can orchestrate read-only Planner -> Reviewer -> final reviewed summary.
+- Planning Workflow status: backend can orchestrate read-only Planner -> Reviewer -> Validator and return a final execution decision.
 
 ## Current Frontend Status
 
@@ -215,7 +224,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, previews text files, and displays a compact project context summary.
   - `frontend/components/planner-panel.tsx` submits read-only planning requests and displays structured planner output.
   - `frontend/components/reviewer-panel.tsx` submits planner JSON for read-only review and displays structured reviewer output.
-  - `frontend/components/planning-workflow-panel.tsx` runs the combined read-only planning workflow and displays the final reviewed summary.
+  - `frontend/components/planning-workflow-panel.tsx` runs the combined read-only planning workflow and displays final execution readiness, blockers, warnings, required changes, risks, tests, planner steps, and Validator readiness.
   - `frontend/components/validator-panel.tsx` validates pasted planner/reviewer JSON and displays structured readiness output.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
@@ -236,14 +245,18 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Services implemented:
   - status check through `/api/tags`
   - non-streaming generation through `/api/generate`
-- Streaming responses are not implemented yet.
+  - streaming generation through `/api/generate` with `stream: true`
+- Streaming responses are implemented through FastAPI and the frontend chat panel.
 - Multi-model routing is not implemented yet.
 
 ## Agent System Status
 
-- No agents are implemented yet.
-- Planned future agents include Planner, Context, Coding, Reviewer, Validator, Improvement, Security, Performance, Documentation, WordPress, WooCommerce, Shopify, PHP, JavaScript, HTML/CSS, and API agents.
-- Agent work should wait until backend/chat/service foundation is more mature.
+- Planner Agent is implemented in read-only mode.
+- Reviewer Agent is implemented in read-only mode.
+- Validator Agent is implemented in read-only mode.
+- Combined Planning Workflow now runs Planner -> Reviewer -> Validator and returns a final read-only execution decision.
+- Planned future agents include Coding, Improvement, Security, Performance, Documentation, WordPress, WooCommerce, Shopify, PHP, JavaScript, HTML/CSS, and API agents.
+- Execution/coding agents should wait until approval gates, audit logging, and read-only workflow confidence are stronger.
 
 ## Important Files
 
@@ -281,7 +294,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 72 tests passed.
+- Backend pytest: PASS, 75 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -307,14 +320,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Reviewer malformed model output handling: PASS with clear `502`.
 - Reviewer Ollama error handling: PASS with clear `502`.
 - Reviewer invalid planner data handling: PASS with validation error.
-- `POST /api/v1/workflows/planning`: PASS with mocked successful full workflow.
-- Planning workflow `APPROVE` final summary: PASS.
-- Planning workflow `APPROVE_WITH_CHANGES` final summary: PASS.
-- Planning workflow `REJECT` final summary: PASS.
+- `POST /api/v1/workflows/planning`: PASS with mocked successful Planner -> Reviewer -> Validator workflow.
+- Planning workflow `APPROVE` + Validator `READY` final summary: PASS.
+- Planning workflow `APPROVE_WITH_CHANGES` + Validator `READY_WITH_WARNINGS` final summary: PASS.
+- Planning workflow Reviewer `REJECT` safety handling: PASS with final `BLOCKED`.
+- Planning workflow Validator `BLOCKED` handling: PASS with `execution_ready: false`.
 - Planning workflow with project context: PASS.
 - Planning workflow with workspace-generated context: PASS.
 - Planning workflow planner failure handling: PASS with clear `502`.
 - Planning workflow reviewer failure handling: PASS with clear `502`.
+- Planning workflow validator failure handling: PASS with clear `502`.
 - Planning workflow invalid workspace handling: PASS with clear `404`.
 - `POST /api/v1/agents/validator`: PASS with mocked `READY` result.
 - Validator `READY_WITH_WARNINGS` result: PASS.
@@ -337,7 +352,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live backend `POST /api/v1/chat/stream`: PASS with streamed chunks `Streaming` and ` ready`, then `done`.
 - Live backend `POST /api/v1/agents/planner`: PASS with real Ollama response using DevLoopAI workspace context.
 - Live backend `POST /api/v1/agents/reviewer`: PASS with real Ollama response reviewing real planner output.
-- Live backend `POST /api/v1/workflows/planning`: PASS with real Ollama planner and reviewer responses.
+- Live backend `POST /api/v1/workflows/planning`: PASS with real Ollama planner, reviewer, and validator responses; returned final `READY_WITH_WARNINGS`, `execution_ready: false`, and no blockers for the smoke task.
 - Live backend `POST /api/v1/agents/validator`: PASS with real Ollama validation after real planner/reviewer outputs.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
 - Headless browser frontend -> FastAPI -> Ollama streaming chat flow: PASS.
@@ -352,14 +367,19 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Headless browser workspace context summary display: PASS.
 - Headless browser Planner panel submit/render flow: PASS.
 - Headless browser Reviewer panel submit/render flow: PASS.
-- Headless browser Planning Workflow panel submit/render flow: PASS.
+- Browser Planning Workflow panel static render: PASS, updated UI copy and Validator Agent workflow form present.
+- Headless browser Planning Workflow panel submit/render flow: PASS after Step 20 update.
 - Headless browser Validator panel submit/render flow: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Validator Agent checkpoint is verified; commit/push pending.
+- Step 20 Planning Workflow checkpoint is verified; commit/push pending.
+- Initial pytest command used system Python from the repo root and failed because pytest/app imports were unavailable there; reran successfully with `backend\.venv\Scripts\python.exe` from `backend`.
+- First backend dev-server health wait missed the server startup; captured Uvicorn logs confirmed the server was running on `127.0.0.1:8000`.
+- Temporary browser smoke-test script initially required an unavailable `ws` package; switched to Node's built-in WebSocket client.
+- Browser smoke-test profile `.tmp-chrome-step20/` was generated locally and is now ignored by `.gitignore`.
 - Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
 - Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
 - Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
@@ -386,9 +406,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planning Workflow browser verification and live backend verification passed without app source fixes.
 - Initial Validator READY test exposed that successful file-path notes were treated as warnings; fixed status calculation so only suspicious file-path notes downgrade readiness.
 - Live Validator test blocked a model plan with incorrect file paths, confirming deterministic path checks are useful.
+- Planning Workflow Step 20 now prevents Reviewer `REJECT` from ever being summarized as execution-ready.
+- Planning Workflow Step 20 now preserves Validator `BLOCKED` as a hard final block.
 
 ## Git Commits From Recent Work
 
+- 0e9ee10 - feat: add validator agent foundation
 - 946eb90 - feat: add planning workflow foundation
 - dd12f20 - feat: add reviewer agent foundation
 - 33542b5 - feat: add planner agent foundation
@@ -410,14 +433,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/agents/validator.py`
-- `backend/app/api/v1/endpoints/validator.py`
-- `backend/app/models/validator.py`
-- `backend/tests/test_validator_api.py`
-- `frontend/components/validator-panel.tsx`
-- `backend/app/workflows/__init__.py`
-- `backend/app/api/v1/router.py`
-- `frontend/app/page.tsx`
+- `.gitignore`
+- `backend/app/api/v1/endpoints/planning_workflow.py`
+- `backend/app/models/planning_workflow.py`
+- `backend/app/workflows/planning.py`
+- `backend/tests/test_planning_workflow_api.py`
+- `frontend/components/planning-workflow-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
@@ -431,16 +452,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: integrate Validator into the combined planning workflow or add plan/review/validation history sessions.
+Recommended next task: add persisted read-only planning workflow history or an explicit approval gate for future execution workflows.
 
 ## Next Files Likely to Change
 
-- `backend/app/agents/validator.py`
-- `backend/app/api/v1/endpoints/validator.py`
-- `backend/app/models/validator.py`
-- `frontend/components/validator-panel.tsx`
+- backend workflow/history models and services
+- backend workflow/history API endpoints
+- frontend Planning Workflow history or approval-gate UI
 - `frontend/lib/api-client.ts`
-- Planning workflow files if Validator is integrated into the orchestration step
 
 ## Do Not Forget
 

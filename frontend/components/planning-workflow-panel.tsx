@@ -81,8 +81,8 @@ export default function PlanningWorkflowPanel() {
           Planning Workflow
         </h2>
         <p className="text-sm leading-6 text-zinc-600">
-          Run Planner Agent, Reviewer Agent, and a final read-only reviewed
-          summary.
+          Run Planner Agent, Reviewer Agent, Validator Agent, and a final
+          read-only execution decision.
         </p>
       </div>
 
@@ -94,7 +94,7 @@ export default function PlanningWorkflowPanel() {
           id="workflow-task"
           className="min-h-24 resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none transition focus:border-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-100"
           disabled={isLoading}
-          placeholder="Describe the development task to plan and review..."
+          placeholder="Describe the development task to plan, review, and validate..."
           value={task}
           onChange={(event) => {
             setTask(event.target.value);
@@ -125,7 +125,8 @@ export default function PlanningWorkflowPanel() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-zinc-500">
-            Workflow is read-only; it plans and reviews without executing.
+            Workflow is read-only; it plans, reviews, and validates without
+            executing.
           </p>
           <button
             className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
@@ -154,12 +155,26 @@ export default function PlanningWorkflowPanel() {
             <p className="text-xs text-zinc-500">
               {workflowStatus.workflow.final_reviewed_summary.final_recommendation}
               {workflowStatus.workflow.final_reviewed_summary.user_approval_required
-                ? " · User approval required"
-                : " · Ready for approval-free execution later"}
+                ? " - User approval required"
+                : " - Ready for approval-free execution later"}
+            </p>
+            <p className="text-xs leading-5 text-zinc-600">
+              {
+                workflowStatus.workflow.final_reviewed_summary
+                  .final_execution_readiness
+              }
             </p>
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 text-sm lg:grid-cols-2">
+            <WorkflowList
+              label="Blockers"
+              values={workflowStatus.workflow.final_reviewed_summary.blockers}
+            />
+            <WorkflowList
+              label="Warnings"
+              values={workflowStatus.workflow.final_reviewed_summary.warnings}
+            />
             <WorkflowList
               label="Required changes"
               values={
@@ -180,6 +195,12 @@ export default function PlanningWorkflowPanel() {
             <WorkflowList
               label="Planner steps"
               values={workflowStatus.workflow.planner_output.implementation_steps}
+            />
+            <WorkflowList
+              label="Validator readiness"
+              values={[
+                workflowStatus.workflow.validator_output.final_execution_readiness,
+              ]}
             />
           </div>
         </div>
