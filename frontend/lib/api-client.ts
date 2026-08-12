@@ -102,6 +102,26 @@ export interface PlannerResponse {
   raw_model_response: string | null;
 }
 
+export type ReviewRecommendation =
+  | "APPROVE"
+  | "APPROVE_WITH_CHANGES"
+  | "REJECT";
+
+export interface ReviewerResponse {
+  overall_assessment: string;
+  missing_steps: string[];
+  incorrect_assumptions: string[];
+  architecture_concerns: string[];
+  security_concerns: string[];
+  performance_concerns: string[];
+  testing_gaps: string[];
+  unnecessary_changes: string[];
+  recommended_improvements: string[];
+  approval_recommendation: ReviewRecommendation;
+  model: string;
+  raw_model_response: string | null;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -318,6 +338,24 @@ export async function createPlannerPlan(
     body: JSON.stringify({
       task,
       workspace_path: workspacePath || null,
+      constraints,
+    }),
+  });
+}
+
+export async function reviewPlannerOutput(
+  task: string,
+  plannerOutput: PlannerResponse,
+  constraints: string[] = [],
+): Promise<ReviewerResponse> {
+  return requestJson<ReviewerResponse>("/agents/reviewer", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      task,
+      planner_output: plannerOutput,
       constraints,
     }),
   });

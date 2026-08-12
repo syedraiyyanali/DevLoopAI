@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 20:05:51 +05:00
+Time: 20:15:49 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: ab08096 - feat: add project context summary
-Working Tree: planner agent foundation changes verified; commit pending
-Last Push: ab08096 pushed to origin/main
+Latest Commit: 33542b5 - feat: add planner agent foundation
+Working Tree: reviewer agent foundation changes verified; commit pending
+Last Push: 33542b5 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Planner Agent Foundation
+Sprint: Sprint 1 - Reviewer Agent Foundation
 
 ## Current Step
 
-Step: Sprint 1 - Step 16: Lightweight Read-Only Planner Agent
+Step: Sprint 1 - Step 17: Lightweight Read-Only Reviewer Agent
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added and verified a lightweight read-only Planner Agent that returns structured implementation plans from a user task and optional project context.
+Added and verified a lightweight read-only Reviewer Agent that critiques Planner Agent output before any future execution.
 
 ## Current Goal
 
-Commit the verified Planner Agent foundation checkpoint and push it to GitHub.
+Commit the verified Reviewer Agent foundation checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -94,6 +94,15 @@ Commit the verified Planner Agent foundation checkpoint and push it to GitHub.
 - Added malformed model output and Ollama error handling with clear `502` responses.
 - Added a minimal frontend Planner panel for submitting tasks and rendering structured plans.
 - Verified a real Planner Agent call against Ollama with DevLoopAI workspace context.
+- Added `POST /api/v1/agents/reviewer` for read-only plan review.
+- Added `ReviewerAgent` that uses `OllamaService` through the backend service layer.
+- Added strict reviewer request/response schemas and model-output parsing.
+- Reviewer accepts original task, Planner Agent output, optional project context, optional constraints, and optional model.
+- Reviewer returns structured assessment, missing steps, incorrect assumptions, architecture/security/performance concerns, testing gaps, unnecessary changes, recommended improvements, and approval recommendation.
+- Approval recommendation is validated as `APPROVE`, `APPROVE_WITH_CHANGES`, or `REJECT`.
+- Added malformed model output, invalid planner data, and Ollama error handling.
+- Added a minimal frontend Reviewer panel for pasting planner JSON and rendering a structured review.
+- Verified real Planner -> Reviewer flow against Ollama.
 
 ## Current Architecture
 
@@ -144,6 +153,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/workspace/read`
   - `POST /api/v1/workspace/context`
   - `POST /api/v1/agents/planner`
+  - `POST /api/v1/agents/reviewer`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
@@ -154,6 +164,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `WorkspaceService.read_text_file`
   - `WorkspaceService.summarize_context`
   - `PlannerAgent.create_plan`
+  - `ReviewerAgent.review_plan`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -162,10 +173,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - chat API tests
   - workspace API tests
   - planner API tests
+  - reviewer API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 - Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
 - Project context status: backend can produce deterministic structured summaries without sending project contents to Ollama.
 - Planner Agent status: backend can produce read-only structured implementation plans using Ollama and safe project context summaries.
+- Reviewer Agent status: backend can critique planner output in read-only mode and return validated approval recommendations.
 
 ## Current Frontend Status
 
@@ -176,6 +189,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
   - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, previews text files, and displays a compact project context summary.
   - `frontend/components/planner-panel.tsx` submits read-only planning requests and displays structured planner output.
+  - `frontend/components/reviewer-panel.tsx` submits planner JSON for read-only review and displays structured reviewer output.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
@@ -240,7 +254,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 49 tests passed.
+- Backend pytest: PASS, 56 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -258,6 +272,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `POST /api/v1/agents/planner`: PASS with workspace-path generated context.
 - Planner malformed model output handling: PASS with clear `502`.
 - Planner Ollama error handling: PASS with clear `502`.
+- `POST /api/v1/agents/reviewer`: PASS with mocked no-context review.
+- `POST /api/v1/agents/reviewer`: PASS with mocked project-context review.
+- Reviewer `APPROVE` result: PASS.
+- Reviewer `APPROVE_WITH_CHANGES` result: PASS.
+- Reviewer `REJECT` result: PASS.
+- Reviewer malformed model output handling: PASS with clear `502`.
+- Reviewer Ollama error handling: PASS with clear `502`.
+- Reviewer invalid planner data handling: PASS with validation error.
 - Workspace traversal blocking: PASS.
 - Workspace binary-file blocking: PASS.
 - Workspace large-file blocking: PASS.
@@ -268,6 +290,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live backend `POST /api/v1/chat`: PASS with `qwen2.5-coder:7b`.
 - Live backend `POST /api/v1/chat/stream`: PASS with streamed chunks `Streaming` and ` ready`, then `done`.
 - Live backend `POST /api/v1/agents/planner`: PASS with real Ollama response using DevLoopAI workspace context.
+- Live backend `POST /api/v1/agents/reviewer`: PASS with real Ollama response reviewing real planner output.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
 - Headless browser frontend -> FastAPI -> Ollama streaming chat flow: PASS.
 - Browser example prompts: PASS.
@@ -280,12 +303,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Headless browser workspace panel open/list/preview: PASS.
 - Headless browser workspace context summary display: PASS.
 - Headless browser Planner panel submit/render flow: PASS.
+- Headless browser Reviewer panel submit/render flow: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Planner Agent foundation checkpoint is verified; commit/push pending.
+- Reviewer Agent foundation checkpoint is verified; commit/push pending.
 - Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
 - Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
 - Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
@@ -308,9 +332,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Browser context-summary verification initially used case-sensitive assertions against uppercase rendered labels; corrected the smoke test, no app bug.
 - Browser context-summary verification initially submitted before React accepted direct DOM input; corrected the smoke test to use real text insertion, no app bug.
 - First live planner call returned malformed non-JSON model output; fixed by adding Ollama JSON format support through `OllamaService` and using it for Planner Agent calls.
+- Reviewer Agent used existing Ollama JSON format support and returned valid JSON on first live verification.
 
 ## Git Commits From Recent Work
 
+- 33542b5 - feat: add planner agent foundation
 - ab08096 - feat: add project context summary
 - b61aeb1 - feat: add read-only workspace foundation
 - 5fb6fcb - feat: add streaming chat responses
@@ -329,18 +355,15 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
+- `backend/app/agents/reviewer.py`
+- `backend/app/api/v1/endpoints/reviewer.py`
+- `backend/app/models/reviewer.py`
+- `backend/tests/test_reviewer_api.py`
+- `frontend/components/reviewer-panel.tsx`
 - `backend/app/agents/planner.py`
-- `backend/app/api/v1/endpoints/planner.py`
 - `backend/app/api/v1/router.py`
-- `backend/app/models/chat.py`
-- `backend/app/models/planner.py`
-- `backend/app/services/ollama.py`
-- `backend/tests/test_ollama_service.py`
-- `backend/tests/test_planner_api.py`
 - `frontend/app/page.tsx`
-- `frontend/components/planner-panel.tsx`
 - `frontend/lib/api-client.ts`
-- `backend/app/api/v1/endpoints/workspace.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -353,16 +376,16 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add a Planner history/session foundation or begin a read-only Reviewer Agent that critiques a proposed plan before execution.
+Recommended next task: connect Planner and Reviewer into a single read-only planning workflow endpoint, or add plan/review history sessions.
 
 ## Next Files Likely to Change
 
-- `backend/app/agents/planner.py`
-- `backend/app/api/v1/endpoints/planner.py`
-- `backend/app/models/planner.py`
-- `frontend/components/planner-panel.tsx`
+- `backend/app/agents/reviewer.py`
+- `backend/app/api/v1/endpoints/reviewer.py`
+- `backend/app/models/reviewer.py`
+- `frontend/components/reviewer-panel.tsx`
 - `frontend/lib/api-client.ts`
-- New planner session/history files if the next planning UX step begins
+- New planning workflow/session files if the next orchestration step begins
 
 ## Do Not Forget
 
@@ -376,4 +399,4 @@ Recommended next task: add a Planner history/session foundation or begin a read-
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace, project-context, and Planner Agent foundation.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace, project-context, Planner Agent, and Reviewer Agent foundation.
