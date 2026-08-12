@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "development"
     debug: bool = True
+    log_level: str = "INFO"
 
     api_prefix: str = "/api/v1"
 
@@ -44,6 +46,22 @@ class Settings(BaseSettings):
             for origin in self.cors_origins.split(",")
             if origin.strip()
         ]
+
+    @field_validator("log_level")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        """
+        Normalize logging levels so configuration stays predictable.
+        """
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        normalized_value = value.strip().upper()
+
+        if normalized_value not in valid_levels:
+            raise ValueError(
+                "log_level must be one of DEBUG, INFO, WARNING, ERROR, or CRITICAL"
+            )
+
+        return normalized_value
 
 
 @lru_cache
