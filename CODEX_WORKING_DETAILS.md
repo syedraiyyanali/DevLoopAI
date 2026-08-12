@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: 9737311 - docs: update step 20 working details
-Working Tree: approval gate changes verified; commit pending
-Last Push: 9737311 pushed to origin/main
+Latest Commit: 8568635 - feat: add planning approval gate
+Working Tree: clean after Step 21 checkpoint
+Last Push: 8568635 pushed to origin/main
 
 ## Current Sprint
 
@@ -29,7 +29,7 @@ Added an explicit read-only user approval gate before any future execution workf
 
 ## Current Goal
 
-Commit the verified Step 21 approval-gate checkpoint and push it to GitHub.
+Step 21 approval-gate checkpoint committed and pushed to GitHub.
 
 ## What Has Been Completed
 
@@ -406,7 +406,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Known Problems
 
 - None currently blocking.
-- Step 21 approval-gate checkpoint is verified; commit/push pending.
+- Step 21 approval-gate checkpoint is verified, committed, and pushed.
 - Browser approval automation with real Ollama workflow timed out after the backend completed the workflow; API approval flow passed, frontend build/lint passed, and the temporary browser script was removed.
 - Initial pytest command used system Python from the repo root and failed because pytest/app imports were unavailable there; reran successfully with `backend\.venv\Scripts\python.exe` from `backend`.
 - First backend dev-server health wait missed the server startup; captured Uvicorn logs confirmed the server was running on `127.0.0.1:8000`.
@@ -444,6 +444,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Git Commits From Recent Work
 
+- 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
 - 946eb90 - feat: add planning workflow foundation
