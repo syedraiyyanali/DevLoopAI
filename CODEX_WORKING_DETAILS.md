@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 19:24:30 +05:00
+Time: 19:40:13 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: 5fb6fcb - feat: add streaming chat responses
-Working Tree: workspace foundation changes verified; commit pending
-Last Push: 5fb6fcb pushed to origin/main
+Latest Commit: b61aeb1 - feat: add read-only workspace foundation
+Working Tree: project context summary changes verified; commit pending
+Last Push: b61aeb1 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Project Workspace Foundation
+Sprint: Sprint 1 - Project Context Summary
 
 ## Current Step
 
-Step: Sprint 1 - Step 14: Read-Only Project Workspace Access
+Step: Sprint 1 - Step 15: Read-Only Project Context Summary
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added and verified read-only local project workspace opening, listing, and safe text-file preview.
+Added and verified deterministic read-only project context summaries on top of the safe workspace service.
 
 ## Current Goal
 
-Commit the verified project workspace foundation checkpoint and push it to GitHub.
+Commit the verified project context summary checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -79,6 +79,13 @@ Commit the verified project workspace foundation checkpoint and push it to GitHu
 - Added workspace safety protections for traversal, generated/heavy folders, secret-like files, binary files, non-UTF-8 files, and large files.
 - Added a minimal frontend Workspace panel for opening a local folder, browsing safe entries, and previewing text files.
 - Verified workspace APIs manually against a temporary project and verified the frontend workspace panel in headless Chrome.
+- Added `POST /api/v1/workspace/context` for deterministic read-only project summaries.
+- Added project type/framework detection for Python, FastAPI, Node.js, and Next.js projects.
+- Added safe dependency metadata extraction from visible `package.json` and `requirements.txt` files, including nested workspace manifests.
+- Added safe Git presence, branch, and remote-name metadata detection.
+- Added README excerpt, important config files, source directories, likely entry points, language counts, file/folder counts, ignored directory policy, and warnings.
+- Added compact frontend Project context summary display in the existing Workspace panel.
+- Verified context summaries manually against DevLoopAI and temporary sample workspaces.
 
 ## Current Architecture
 
@@ -127,6 +134,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/workspace/open`
   - `POST /api/v1/workspace/list`
   - `POST /api/v1/workspace/read`
+  - `POST /api/v1/workspace/context`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
@@ -135,6 +143,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `WorkspaceService.open_workspace`
   - `WorkspaceService.list_directory`
   - `WorkspaceService.read_text_file`
+  - `WorkspaceService.summarize_context`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -144,6 +153,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - workspace API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 - Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
+- Project context status: backend can produce deterministic structured summaries without sending project contents to Ollama.
 
 ## Current Frontend Status
 
@@ -152,7 +162,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/app/page.tsx` is now a DevLoopAI workspace/status screen.
   - `frontend/components/backend-status.tsx` displays FastAPI health.
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
-  - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, and previews text files.
+  - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, previews text files, and displays a compact project context summary.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
@@ -217,7 +227,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 36 tests passed.
+- Backend pytest: PASS, 43 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -229,6 +239,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `POST /api/v1/workspace/open`: PASS with valid local folder metadata.
 - `POST /api/v1/workspace/list`: PASS with ignored folders and secret files excluded.
 - `POST /api/v1/workspace/read`: PASS with safe text-file content.
+- `POST /api/v1/workspace/context`: PASS with DevLoopAI summary detecting Python, Node.js, FastAPI, Next.js, Git branch, safe manifests, source directories, entry points, and language counts.
 - Workspace traversal blocking: PASS.
 - Workspace binary-file blocking: PASS.
 - Workspace large-file blocking: PASS.
@@ -248,12 +259,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Browser non-streaming fallback after stream startup failure: PASS.
 - Browser synthetic error state: PASS.
 - Headless browser workspace panel open/list/preview: PASS.
+- Headless browser workspace context summary display: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Workspace foundation checkpoint is verified; commit/push pending.
+- Project context summary checkpoint is verified; commit/push pending.
 - Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
 - Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
 - Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
@@ -272,9 +284,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Browser verification initially exposed automation timing issues; no app source bug was found.
 - Added stream parsing safeguards for empty stream lines, malformed/non-object chunks, missing response fields, Ollama connection failures, HTTP failures, and interrupted streams.
 - Fixed workspace test fixture line-ending instability on Windows by writing test fixture bytes explicitly.
+- Fixed project context framework detection for nested `package.json` manifests so monorepo-style frontend folders are summarized correctly.
+- Browser context-summary verification initially used case-sensitive assertions against uppercase rendered labels; corrected the smoke test, no app bug.
+- Browser context-summary verification initially submitted before React accepted direct DOM input; corrected the smoke test to use real text insertion, no app bug.
 
 ## Git Commits From Recent Work
 
+- b61aeb1 - feat: add read-only workspace foundation
 - 5fb6fcb - feat: add streaming chat responses
 - abed747 - feat: add frontend backend integration
 - c84a1fc - docs: refresh working details checkpoint
@@ -292,11 +308,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `backend/app/api/v1/endpoints/workspace.py`
-- `backend/app/api/v1/router.py`
 - `backend/app/models/workspace.py`
 - `backend/app/services/workspace.py`
 - `backend/tests/test_workspace_api.py`
-- `frontend/app/page.tsx`
 - `frontend/components/workspace-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
@@ -311,7 +325,7 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add a read-only project context summary endpoint or begin the first lightweight agent-planning foundation using the safe workspace service.
+Recommended next task: begin the first lightweight agent-planning foundation using the safe workspace and project-context services.
 
 ## Next Files Likely to Change
 
@@ -319,7 +333,7 @@ Recommended next task: add a read-only project context summary endpoint or begin
 - `backend/app/api/v1/endpoints/workspace.py`
 - `frontend/components/workspace-panel.tsx`
 - `frontend/lib/api-client.ts`
-- New project context files if the workspace summary step begins
+- New agent/planner service and schema files if the agent-planning foundation begins
 
 ## Do Not Forget
 
@@ -333,4 +347,4 @@ Recommended next task: add a read-only project context summary endpoint or begin
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the safe read-only workspace foundation.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace and project-context foundation.

@@ -3,6 +3,8 @@ from starlette import status
 
 from app.models.workspace import (
     WorkspaceFileContent,
+    WorkspaceContextRequest,
+    WorkspaceContextSummary,
     WorkspaceListRequest,
     WorkspaceListResponse,
     WorkspaceMetadata,
@@ -100,5 +102,28 @@ async def read_workspace_file(request: WorkspaceReadRequest) -> WorkspaceFileCon
     except WorkspaceUnsupportedFileError as exc:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/context",
+    response_model=WorkspaceContextSummary,
+    summary="Summarize workspace context",
+    description="Build a compact deterministic read-only summary of a workspace.",
+)
+async def summarize_workspace_context(
+    request: WorkspaceContextRequest,
+) -> WorkspaceContextSummary:
+    """
+    Summarize project structure without sending project contents to a model.
+    """
+    service = WorkspaceService()
+
+    try:
+        return service.summarize_context(request.workspace_path)
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc

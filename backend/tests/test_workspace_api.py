@@ -173,3 +173,189 @@ def test_read_workspace_rejects_files_over_size_limit(tmp_path, monkeypatch):
 
     assert response.status_code == 415
     assert response.json()["error"]["message"] == "File is too large to read safely"
+
+
+def test_context_detects_python_fastapi_project(tmp_path):
+    workspace = tmp_path / "fastapi-project"
+    workspace.mkdir()
+    (workspace / "README.md").write_bytes(b"# FastAPI Project\nAPI service summary.\n")
+    (workspace / "requirements.txt").write_bytes(b"fastapi==0.125.0\npytest\n")
+    (workspace / "app").mkdir()
+    (workspace / "app" / "main.py").write_bytes(b"from fastapi import FastAPI\n")
+    (workspace / ".git").mkdir()
+    (workspace / ".git" / "HEAD").write_bytes(b"ref: refs/heads/main\n")
+    (workspace / ".git" / "config").write_bytes(
+        b'[remote \"origin\"]\n\turl = https://example.test/repo.git\n'
+    )
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workspace"]["name"] == "fastapi-project"
+    assert body["project_types"] == ["Python"]
+    assert body["frameworks"] == ["FastAPI"]
+    assert body["important_config_files"] == ["requirements.txt"]
+    assert body["important_source_directories"] == ["app"]
+    assert body["likely_entry_points"] == ["app/main.py"]
+    assert body["detected_languages"]["Python"] == 1
+    assert body["dependency_metadata"] == [
+        {
+            "manifest": "requirements.txt",
+            "package_name": None,
+            "dependencies": ["fastapi", "pytest"],
+            "dev_dependencies": [],
+        }
+    ]
+    assert body["git"] == {
+        "present": True,
+        "current_branch": "main",
+        "remotes": ["origin"],
+    }
+    assert body["readme_excerpt"].startswith("# FastAPI Project")
+
+
+def test_context_detects_node_next_project(tmp_path):
+    workspace = tmp_path / "next-project"
+    workspace.mkdir()
+    (workspace / "package.json").write_bytes(
+        b'{'
+        b'\"name\":\"next-project\",'
+        b'\"dependencies\":{\"next\":\"16.2.10\",\"react\":\"19.2.4\"},'
+        b'\"devDependencies\":{\"typescript\":\"5.0.0\"}'
+        b'}'
+    )
+    (workspace / "next.config.ts").write_bytes(b"export default {};\n")
+    (workspace / "app").mkdir()
+    (workspace / "app" / "page.tsx").write_bytes(b"export default function Page() {}\n")
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_types"] == ["Node.js"]
+    assert body["frameworks"] == ["Next.js"]
+    assert body["important_config_files"] == ["next.config.ts", "package.json"]
+    assert body["important_source_directories"] == ["app"]
+    assert body["likely_entry_points"] == ["app/page.tsx"]
+    assert body["detected_languages"]["TypeScript"] == 2
+    assert body["dependency_metadata"] == [
+        {
+            "manifest": "package.json",
+            "package_name": "next-project",
+            "dependencies": ["next", "react"],
+            "dev_dependencies": ["typescript"],
+        }
+    ]
+    assert body["git"] == {
+        "present": False,
+        "current_branch": None,
+        "remotes": [],
+    }
+
+
+def test_context_detects_nested_node_next_project(tmp_path):
+    workspace = tmp_path / "monorepo-project"
+    workspace.mkdir()
+    (workspace / "frontend").mkdir()
+    (workspace / "frontend" / "package.json").write_bytes(
+        b'{\"dependencies\":{\"next\":\"16.2.10\"}}'
+    )
+    (workspace / "frontend" / "app").mkdir()
+    (workspace / "frontend" / "app" / "page.tsx").write_bytes(
+        b"export default function Page() {}\n"
+    )
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_types"] == ["Node.js"]
+    assert body["frameworks"] == ["Next.js"]
+    assert body["dependency_metadata"] == [
+        {
+            "manifest": "frontend/package.json",
+            "package_name": None,
+            "dependencies": ["next"],
+            "dev_dependencies": [],
+        }
+    ]
+
+
+def test_context_returns_generic_project_without_known_metadata(tmp_path):
+    workspace = tmp_path / "generic-project"
+    workspace.mkdir()
+    (workspace / "notes.txt").write_bytes(b"plain notes\n")
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_types"] == ["Generic"]
+    assert body["frameworks"] == []
+    assert body["dependency_metadata"] == []
+    assert body["file_count"] == 1
+    assert body["directory_count"] == 0
+
+
+def test_context_handles_invalid_package_json_without_failing(tmp_path):
+    workspace = tmp_path / "broken-metadata"
+    workspace.mkdir()
+    (workspace / "package.json").write_bytes(b"{not-json")
+    (workspace / "src").mkdir()
+    (workspace / "src" / "index.js").write_bytes(b"console.log('ok');\n")
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_types"] == ["Node.js"]
+    assert body["dependency_metadata"] == []
+    assert body["likely_entry_points"] == ["src/index.js"]
+
+
+def test_context_ignores_generated_and_secret_files(tmp_path):
+    workspace = create_workspace(tmp_path)
+    (workspace / "src" / "main.py").write_bytes(b"print('visible')\n")
+    (workspace / "node_modules" / "index.js").write_bytes(b"console.log('hidden')\n")
+    (workspace / ".env.local").write_bytes(b"SECRET=hidden\n")
+
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    serialized_body = str(body)
+    assert "node_modules" not in body["important_source_directories"]
+    assert ".env" not in serialized_body
+    assert ".env.local" not in serialized_body
+    assert body["detected_languages"]["Python"] == 2
+
+
+def test_context_rejects_invalid_workspace_path(tmp_path):
+    response = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(tmp_path / "missing")},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == (
+        "Workspace path must be an existing directory"
+    )

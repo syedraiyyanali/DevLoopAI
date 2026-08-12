@@ -52,6 +52,36 @@ export interface WorkspaceFileContent {
   truncated: boolean;
 }
 
+export interface WorkspaceDependencySummary {
+  manifest: string;
+  package_name: string | null;
+  dependencies: string[];
+  dev_dependencies: string[];
+}
+
+export interface WorkspaceGitSummary {
+  present: boolean;
+  current_branch: string | null;
+  remotes: string[];
+}
+
+export interface WorkspaceContextSummary {
+  workspace: WorkspaceMetadata;
+  project_types: string[];
+  frameworks: string[];
+  important_config_files: string[];
+  important_source_directories: string[];
+  likely_entry_points: string[];
+  detected_languages: Record<string, number>;
+  file_count: number;
+  directory_count: number;
+  dependency_metadata: WorkspaceDependencySummary[];
+  git: WorkspaceGitSummary;
+  readme_excerpt: string | null;
+  ignored_directories: string[];
+  warnings: string[];
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -237,6 +267,20 @@ export async function readWorkspaceFile(
     body: JSON.stringify({
       workspace_path: workspacePath,
       relative_path: relativePath,
+    }),
+  });
+}
+
+export async function getWorkspaceContext(
+  workspacePath: string,
+): Promise<WorkspaceContextSummary> {
+  return requestJson<WorkspaceContextSummary>("/workspace/context", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
     }),
   });
 }

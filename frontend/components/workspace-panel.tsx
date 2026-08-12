@@ -4,9 +4,11 @@ import { FormEvent, useState } from "react";
 
 import {
   ApiError,
+  getWorkspaceContext,
   listWorkspace,
   openWorkspace,
   readWorkspaceFile,
+  type WorkspaceContextSummary,
   type WorkspaceEntry,
   type WorkspaceFileContent,
   type WorkspaceListResponse,
@@ -25,12 +27,21 @@ type FilePreviewStatus =
   | { status: "ready"; file: WorkspaceFileContent }
   | { status: "error"; message: string };
 
+type ContextStatus =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; context: WorkspaceContextSummary }
+  | { status: "error"; message: string };
+
 export default function WorkspacePanel() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>({
     status: "idle",
   });
   const [filePreviewStatus, setFilePreviewStatus] = useState<FilePreviewStatus>({
+    status: "idle",
+  });
+  const [contextStatus, setContextStatus] = useState<ContextStatus>({
     status: "idle",
   });
 
@@ -52,6 +63,7 @@ export default function WorkspacePanel() {
 
     setWorkspaceStatus({ status: "loading" });
     setFilePreviewStatus({ status: "idle" });
+    setContextStatus({ status: "idle" });
 
     try {
       const workspace = await openWorkspace(trimmedPath);
@@ -77,6 +89,7 @@ export default function WorkspacePanel() {
 
     setWorkspaceStatus({ status: "loading" });
     setFilePreviewStatus({ status: "idle" });
+    setContextStatus({ status: "idle" });
 
     try {
       const listing = await listWorkspace(
@@ -119,6 +132,28 @@ export default function WorkspacePanel() {
       });
     } catch (error: unknown) {
       setFilePreviewStatus({
+        status: "error",
+        message: getWorkspaceErrorMessage(error),
+      });
+    }
+  }
+
+  async function summarizeWorkspace() {
+    if (workspaceStatus.status !== "ready") {
+      return;
+    }
+
+    setContextStatus({ status: "loading" });
+
+    try {
+      const context = await getWorkspaceContext(workspaceStatus.workspace.root_path);
+
+      setContextStatus({
+        status: "ready",
+        context,
+      });
+    } catch (error: unknown) {
+      setContextStatus({
         status: "error",
         message: getWorkspaceErrorMessage(error),
       });
@@ -274,7 +309,97 @@ export default function WorkspacePanel() {
           </div>
         </div>
       ) : null}
+
+      {workspaceStatus.status === "ready" ? (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-950">
+                Project context
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Deterministic read-only summary for future agents.
+              </p>
+            </div>
+            <button
+              className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+              disabled={contextStatus.status === "loading"}
+              onClick={summarizeWorkspace}
+              type="button"
+            >
+              {contextStatus.status === "loading" ? "Summarizing..." : "Summarize"}
+            </button>
+          </div>
+
+          {contextStatus.status === "error" ? (
+            <p className="mt-3 text-sm leading-6 text-amber-700">
+              {contextStatus.message}
+            </p>
+          ) : null}
+
+          {contextStatus.status === "ready" ? (
+            <div className="mt-4 grid grid-cols-1 gap-4 text-sm lg:grid-cols-2">
+              <SummaryGroup
+                label="Project types"
+                values={contextStatus.context.project_types}
+              />
+              <SummaryGroup
+                label="Frameworks"
+                values={contextStatus.context.frameworks}
+              />
+              <SummaryGroup
+                label="Source directories"
+                values={contextStatus.context.important_source_directories}
+              />
+              <SummaryGroup
+                label="Entry points"
+                values={contextStatus.context.likely_entry_points}
+              />
+              <SummaryGroup
+                label="Config files"
+                values={contextStatus.context.important_config_files}
+              />
+              <SummaryGroup
+                label="Languages"
+                values={Object.entries(contextStatus.context.detected_languages).map(
+                  ([language, count]) => `${language}: ${count}`,
+                )}
+              />
+
+              <div>
+                <p className="text-xs font-medium uppercase text-zinc-500">
+                  Files
+                </p>
+                <p className="mt-1 text-zinc-900">
+                  {contextStatus.context.file_count} files,{" "}
+                  {contextStatus.context.directory_count} folders
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium uppercase text-zinc-500">Git</p>
+                <p className="mt-1 text-zinc-900">
+                  {contextStatus.context.git.present
+                    ? contextStatus.context.git.current_branch ?? "Present"
+                    : "Not detected"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function SummaryGroup({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 break-words text-zinc-900">
+        {values.length > 0 ? values.join(", ") : "None detected"}
+      </p>
+    </div>
   );
 }
 
