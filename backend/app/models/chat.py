@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     """
     message: str = Field(..., min_length=1)
     model: str | None = None
+    response_format: str | None = None
 
 
 class ChatResponse(BaseModel):

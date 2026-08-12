@@ -82,6 +82,26 @@ export interface WorkspaceContextSummary {
   warnings: string[];
 }
 
+export interface PlannerProjectContext {
+  workspace_name: string | null;
+  project_types: string[];
+  frameworks: string[];
+  languages: Record<string, number>;
+}
+
+export interface PlannerResponse {
+  task_summary: string;
+  assumptions: string[];
+  detected_project_context: PlannerProjectContext;
+  implementation_steps: string[];
+  files_likely_to_change: string[];
+  tests_verification_required: string[];
+  risks: string[];
+  dependencies_or_user_input_needed: string[];
+  model: string;
+  raw_model_response: string | null;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -281,6 +301,24 @@ export async function getWorkspaceContext(
     },
     body: JSON.stringify({
       workspace_path: workspacePath,
+    }),
+  });
+}
+
+export async function createPlannerPlan(
+  task: string,
+  workspacePath?: string,
+  constraints: string[] = [],
+): Promise<PlannerResponse> {
+  return requestJson<PlannerResponse>("/agents/planner", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      task,
+      workspace_path: workspacePath || null,
+      constraints,
     }),
   });
 }

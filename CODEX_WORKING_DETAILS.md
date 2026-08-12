@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-12
-Time: 19:40:13 +05:00
+Time: 20:05:51 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: b61aeb1 - feat: add read-only workspace foundation
-Working Tree: project context summary changes verified; commit pending
-Last Push: b61aeb1 pushed to origin/main
+Latest Commit: ab08096 - feat: add project context summary
+Working Tree: planner agent foundation changes verified; commit pending
+Last Push: ab08096 pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Project Context Summary
+Sprint: Sprint 1 - Planner Agent Foundation
 
 ## Current Step
 
-Step: Sprint 1 - Step 15: Read-Only Project Context Summary
+Step: Sprint 1 - Step 16: Lightweight Read-Only Planner Agent
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added and verified deterministic read-only project context summaries on top of the safe workspace service.
+Added and verified a lightweight read-only Planner Agent that returns structured implementation plans from a user task and optional project context.
 
 ## Current Goal
 
-Commit the verified project context summary checkpoint and push it to GitHub.
+Commit the verified Planner Agent foundation checkpoint and push it to GitHub.
 
 ## What Has Been Completed
 
@@ -86,6 +86,14 @@ Commit the verified project context summary checkpoint and push it to GitHub.
 - Added README excerpt, important config files, source directories, likely entry points, language counts, file/folder counts, ignored directory policy, and warnings.
 - Added compact frontend Project context summary display in the existing Workspace panel.
 - Verified context summaries manually against DevLoopAI and temporary sample workspaces.
+- Added `POST /api/v1/agents/planner` for read-only implementation planning.
+- Added `PlannerAgent` that uses `OllamaService` through the backend service layer.
+- Added strict planner request/response schemas and model-output parsing.
+- Added optional planner inputs for workspace path, precomputed project context, constraints, and model.
+- Added Ollama JSON format support through the existing chat generation service for planner calls.
+- Added malformed model output and Ollama error handling with clear `502` responses.
+- Added a minimal frontend Planner panel for submitting tasks and rendering structured plans.
+- Verified a real Planner Agent call against Ollama with DevLoopAI workspace context.
 
 ## Current Architecture
 
@@ -135,6 +143,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/workspace/list`
   - `POST /api/v1/workspace/read`
   - `POST /api/v1/workspace/context`
+  - `POST /api/v1/agents/planner`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
@@ -144,6 +153,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `WorkspaceService.list_directory`
   - `WorkspaceService.read_text_file`
   - `WorkspaceService.summarize_context`
+  - `PlannerAgent.create_plan`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -151,9 +161,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - Ollama service tests
   - chat API tests
   - workspace API tests
+  - planner API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 - Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
 - Project context status: backend can produce deterministic structured summaries without sending project contents to Ollama.
+- Planner Agent status: backend can produce read-only structured implementation plans using Ollama and safe project context summaries.
 
 ## Current Frontend Status
 
@@ -163,6 +175,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/backend-status.tsx` displays FastAPI health.
   - `frontend/components/ollama-status.tsx` displays Ollama reachability and model availability.
   - `frontend/components/workspace-panel.tsx` opens a local workspace path, lists safe entries, previews text files, and displays a compact project context summary.
+  - `frontend/components/planner-panel.tsx` submits read-only planning requests and displays structured planner output.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
   - `frontend/lib/api-config.ts` reads `NEXT_PUBLIC_API_BASE_URL`.
@@ -227,7 +240,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 43 tests passed.
+- Backend pytest: PASS, 49 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -240,6 +253,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `POST /api/v1/workspace/list`: PASS with ignored folders and secret files excluded.
 - `POST /api/v1/workspace/read`: PASS with safe text-file content.
 - `POST /api/v1/workspace/context`: PASS with DevLoopAI summary detecting Python, Node.js, FastAPI, Next.js, Git branch, safe manifests, source directories, entry points, and language counts.
+- `POST /api/v1/agents/planner`: PASS with mocked no-workspace request.
+- `POST /api/v1/agents/planner`: PASS with mocked precomputed project context.
+- `POST /api/v1/agents/planner`: PASS with workspace-path generated context.
+- Planner malformed model output handling: PASS with clear `502`.
+- Planner Ollama error handling: PASS with clear `502`.
 - Workspace traversal blocking: PASS.
 - Workspace binary-file blocking: PASS.
 - Workspace large-file blocking: PASS.
@@ -249,6 +267,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - ESLint: PASS.
 - Live backend `POST /api/v1/chat`: PASS with `qwen2.5-coder:7b`.
 - Live backend `POST /api/v1/chat/stream`: PASS with streamed chunks `Streaming` and ` ready`, then `done`.
+- Live backend `POST /api/v1/agents/planner`: PASS with real Ollama response using DevLoopAI workspace context.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
 - Headless browser frontend -> FastAPI -> Ollama streaming chat flow: PASS.
 - Browser example prompts: PASS.
@@ -260,12 +279,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Browser synthetic error state: PASS.
 - Headless browser workspace panel open/list/preview: PASS.
 - Headless browser workspace context summary display: PASS.
+- Headless browser Planner panel submit/render flow: PASS.
 - Git diff whitespace check: PASS for committed backend work.
 
 ## Known Problems
 
 - None currently blocking.
-- Project context summary checkpoint is verified; commit/push pending.
+- Planner Agent foundation checkpoint is verified; commit/push pending.
 - Browser automation first connected to Chrome's browser-level debugger socket instead of the page target; fixed by selecting the page WebSocket target.
 - Browser automation initially checked example prompt state before React repainted; fixed by waiting for the controlled textarea value.
 - Browser automation initially overwrote the textarea with a plain DOM assignment that React did not accept before submit; fixed by using the native textarea value setter and dispatching input.
@@ -287,9 +307,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Fixed project context framework detection for nested `package.json` manifests so monorepo-style frontend folders are summarized correctly.
 - Browser context-summary verification initially used case-sensitive assertions against uppercase rendered labels; corrected the smoke test, no app bug.
 - Browser context-summary verification initially submitted before React accepted direct DOM input; corrected the smoke test to use real text insertion, no app bug.
+- First live planner call returned malformed non-JSON model output; fixed by adding Ollama JSON format support through `OllamaService` and using it for Planner Agent calls.
 
 ## Git Commits From Recent Work
 
+- ab08096 - feat: add project context summary
 - b61aeb1 - feat: add read-only workspace foundation
 - 5fb6fcb - feat: add streaming chat responses
 - abed747 - feat: add frontend backend integration
@@ -307,12 +329,18 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/workspace.py`
-- `backend/app/models/workspace.py`
-- `backend/app/services/workspace.py`
-- `backend/tests/test_workspace_api.py`
-- `frontend/components/workspace-panel.tsx`
+- `backend/app/agents/planner.py`
+- `backend/app/api/v1/endpoints/planner.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/models/chat.py`
+- `backend/app/models/planner.py`
+- `backend/app/services/ollama.py`
+- `backend/tests/test_ollama_service.py`
+- `backend/tests/test_planner_api.py`
+- `frontend/app/page.tsx`
+- `frontend/components/planner-panel.tsx`
 - `frontend/lib/api-client.ts`
+- `backend/app/api/v1/endpoints/workspace.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -325,15 +353,16 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: begin the first lightweight agent-planning foundation using the safe workspace and project-context services.
+Recommended next task: add a Planner history/session foundation or begin a read-only Reviewer Agent that critiques a proposed plan before execution.
 
 ## Next Files Likely to Change
 
-- `backend/app/services/workspace.py`
-- `backend/app/api/v1/endpoints/workspace.py`
-- `frontend/components/workspace-panel.tsx`
+- `backend/app/agents/planner.py`
+- `backend/app/api/v1/endpoints/planner.py`
+- `backend/app/models/planner.py`
+- `frontend/components/planner-panel.tsx`
 - `frontend/lib/api-client.ts`
-- New agent/planner service and schema files if the agent-planning foundation begins
+- New planner session/history files if the next planning UX step begins
 
 ## Do Not Forget
 
@@ -347,4 +376,4 @@ Recommended next task: begin the first lightweight agent-planning foundation usi
 
 ## Resume Instructions
 
-On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace and project-context foundation.
+On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace, project-context, and Planner Agent foundation.

@@ -184,6 +184,22 @@ async def test_generate_chat_response_uses_configured_model_by_default():
 
 
 @pytest.mark.anyio
+async def test_generate_chat_response_can_request_json_format():
+    MockAsyncClient.response = MockResponse({"response": '{"ok": true}'})
+
+    await build_service().generate_chat_response(
+        ChatRequest(message="Hello", response_format="json")
+    )
+
+    assert MockAsyncClient.last_post_json == {
+        "model": "qwen2.5-coder:7b",
+        "prompt": "Hello",
+        "stream": False,
+        "format": "json",
+    }
+
+
+@pytest.mark.anyio
 async def test_generate_chat_response_uses_requested_model():
     MockAsyncClient.response = MockResponse({"response": "Hello from another model"})
 

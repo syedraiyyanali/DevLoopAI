@@ -1,6 +1,7 @@
 import BackendStatus from "../components/backend-status";
 import ChatPanel from "../components/chat-panel";
 import OllamaStatusPanel from "../components/ollama-status";
+import PlannerPanel from "../components/planner-panel";
 import WorkspacePanel from "../components/workspace-panel";
 import { API_DOCS_URL } from "../lib/api-config";
 
@@ -39,6 +40,8 @@ export default function Home() {
         </section>
 
         <WorkspacePanel />
+
+        <PlannerPanel />
 
         <ChatPanel />
       </div>

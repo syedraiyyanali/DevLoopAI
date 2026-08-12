@@ -78,6 +78,9 @@ class OllamaService:
             "stream": False,
         }
 
+        if chat_request.response_format is not None:
+            payload["format"] = chat_request.response_format
+
         try:
             async with httpx2.AsyncClient(timeout=60.0) as client:
                 response = await client.post(generate_url, json=payload)

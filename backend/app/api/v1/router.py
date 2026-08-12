@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import chat, ollama, system, workspace
+from app.api.v1.endpoints import chat, ollama, planner, system, workspace
 
 
 api_router = APIRouter()
@@ -23,4 +23,9 @@ api_router.include_router(
 api_router.include_router(
     workspace.router,
     tags=["Workspace"],
+)
+
+api_router.include_router(
+    planner.router,
+    tags=["Agents"],
 )
