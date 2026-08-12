@@ -137,6 +137,24 @@ export interface PlanningWorkflowResponse {
   final_reviewed_summary: FinalReviewedPlanSummary;
 }
 
+export type ValidationStatus = "READY" | "READY_WITH_WARNINGS" | "BLOCKED";
+
+export interface ValidatorResponse {
+  overall_validation_status: ValidationStatus;
+  plan_completeness: string[];
+  file_path_validity: string[];
+  dependency_concerns: string[];
+  environment_tool_requirements: string[];
+  security_concerns: string[];
+  destructive_operation_warnings: string[];
+  missing_user_information: string[];
+  test_verification_readiness: string[];
+  blockers: string[];
+  final_execution_readiness: string;
+  model: string;
+  raw_model_response: string | null;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -389,6 +407,26 @@ export async function runPlanningWorkflow(
     body: JSON.stringify({
       task,
       workspace_path: workspacePath || null,
+      constraints,
+    }),
+  });
+}
+
+export async function validateReviewedPlan(
+  task: string,
+  plannerOutput: PlannerResponse,
+  reviewerOutput: ReviewerResponse,
+  constraints: string[] = [],
+): Promise<ValidatorResponse> {
+  return requestJson<ValidatorResponse>("/agents/validator", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      task,
+      planner_output: plannerOutput,
+      reviewer_output: reviewerOutput,
       constraints,
     }),
   });

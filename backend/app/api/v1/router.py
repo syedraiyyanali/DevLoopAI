@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     planning_workflow,
     reviewer,
     system,
+    validator,
     workspace,
 )
 
@@ -40,6 +41,11 @@ api_router.include_router(
 
 api_router.include_router(
     reviewer.router,
+    tags=["Agents"],
+)
+
+api_router.include_router(
+    validator.router,
     tags=["Agents"],
 )
 

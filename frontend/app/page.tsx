@@ -4,6 +4,7 @@ import OllamaStatusPanel from "../components/ollama-status";
 import PlannerPanel from "../components/planner-panel";
 import PlanningWorkflowPanel from "../components/planning-workflow-panel";
 import ReviewerPanel from "../components/reviewer-panel";
+import ValidatorPanel from "../components/validator-panel";
 import WorkspacePanel from "../components/workspace-panel";
 import { API_DOCS_URL } from "../lib/api-config";
 
@@ -48,6 +49,8 @@ export default function Home() {
         <ReviewerPanel />
 
         <PlanningWorkflowPanel />
+
+        <ValidatorPanel />
 
         <ChatPanel />
       </div>
