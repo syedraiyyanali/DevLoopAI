@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: 0e9ee10 - feat: add validator agent foundation
-Working Tree: planning workflow validator integration verified; commit pending
-Last Push: 0e9ee10 pushed to origin/main
+Latest Commit: c450faa - feat: integrate validator into planning workflow
+Working Tree: clean after Step 20 checkpoint
+Last Push: c450faa pushed to origin/main
 
 ## Current Sprint
 
@@ -29,7 +29,7 @@ Integrated Validator Agent into the combined read-only Planning Workflow.
 
 ## Current Goal
 
-Commit the verified Step 20 Planning Workflow checkpoint and push it to GitHub.
+Step 20 Planning Workflow checkpoint committed and pushed to GitHub.
 
 ## What Has Been Completed
 
@@ -375,7 +375,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Known Problems
 
 - None currently blocking.
-- Step 20 Planning Workflow checkpoint is verified; commit/push pending.
+- Step 20 Planning Workflow checkpoint is verified, committed, and pushed.
 - Initial pytest command used system Python from the repo root and failed because pytest/app imports were unavailable there; reran successfully with `backend\.venv\Scripts\python.exe` from `backend`.
 - First backend dev-server health wait missed the server startup; captured Uvicorn logs confirmed the server was running on `127.0.0.1:8000`.
 - Temporary browser smoke-test script initially required an unavailable `ws` package; switched to Node's built-in WebSocket client.
@@ -412,6 +412,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Git Commits From Recent Work
 
 - 0e9ee10 - feat: add validator agent foundation
+- c450faa - feat: integrate validator into planning workflow
 - 946eb90 - feat: add planning workflow foundation
 - dd12f20 - feat: add reviewer agent foundation
 - 33542b5 - feat: add planner agent foundation
