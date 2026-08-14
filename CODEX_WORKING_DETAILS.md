@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 02:15:00 +05:00
+Time: 02:45:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 25 Coding Agent dry-run checkpoint pushed
-Working Tree: clean after Step 25 checkpoint
-Last Push: Step 25 checkpoint pushed to origin/main
+Latest Commit: Step 26 Coding diff preview checkpoint ready to push
+Working Tree: clean after Step 26 checkpoint
+Last Push: Step 26 checkpoint ready for origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Controlled Coding Agent Dry-Run Layer
+Sprint: Sprint 1 - Read-Only Coding Diff Preview
 
 ## Current Step
 
-Step: Sprint 1 - Step 25: Controlled Coding Agent Dry-Run Layer
+Step: Sprint 1 - Step 26: Read-Only Coding Diff Preview
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added a zero-write Coding Agent dry-run simulation layer.
+Added a zero-write Coding Agent diff-preview layer.
 
 ## Current Goal
 
-Commit and push the Step 25 Coding Agent dry-run checkpoint.
+Commit and push the Step 26 Coding diff-preview checkpoint.
 
 ## What Has Been Completed
 
@@ -181,6 +181,14 @@ Commit and push the Step 25 Coding Agent dry-run checkpoint.
 - Added narrow model-output normalization for common harmless operation aliases such as `edit_file` -> `modify_text_file`, while still returning `502` for non-JSON or truly malformed dry-run output.
 - Added backend tests for valid handoff dry-run, stale handoff blocking, disallowed model path blocking, secret/ignored path tampering, unsupported operation tampering, malformed model output, Ollama unavailable, invalid workflow ID, and model operation alias normalization.
 - Live Ollama dry-run verification passed using an approved README-only handoff; dry-run proposed modifying `README.md`, creating/deleting nothing, and returned `execution_performed: false`.
+- Added `POST /api/v1/agents/coder/diff-preview` for read-only unified diff previews from a valid Coding Agent dry-run.
+- Added strict diff-preview schemas for current content, proposed content, operation type, unified diff, file warnings, global warnings, and explicit mutation-disabled flags.
+- Added `CoderDiffPreviewAgent`, which regenerates the canonical handoff, revalidates the dry-run fingerprint/workspace/allowed files/allowed operations/mutation-disabled state, asks Ollama only for proposed full file content, and generates the actual patch preview deterministically in Python.
+- Diff preview supports modify and create text-file previews, and delete text-file previews only when the approved handoff explicitly includes `delete_text_file`.
+- Diff preview blocks stale dry-runs, disallowed paths, secret/ignored paths, unexpected model-proposed paths, binary files, large files, unsafe reads, malformed model proposals, and model-reported blockers.
+- Expanded the operation type contract to include `delete_text_file`, but the handoff service only exposes it when the approved plan explicitly mentions delete/remove.
+- Added backend tests for modify-file diff, create-file diff, delete-file diff, unchanged content warning, stale dry-run blocking, disallowed path blocking, secret/ignored path blocking, binary-file protection, large-file protection, and malformed Ollama proposal handling.
+- Live Ollama diff-preview verification passed using the approved README-only handoff; diff preview returned one `README.md` modify preview with a Python-generated unified diff and `execution_performed: false`.
 
 ## Current Architecture
 
@@ -234,6 +242,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/agents/reviewer`
   - `POST /api/v1/agents/validator`
   - `POST /api/v1/agents/coder/dry-run`
+  - `POST /api/v1/agents/coder/diff-preview`
   - `POST /api/v1/workflows/planning`
   - `POST /api/v1/workflows/planning/approve`
   - `POST /api/v1/workflows/planning/reject`
@@ -262,6 +271,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `ExecutionPreflightService.run`
   - `ExecutionHandoffService.create_handoff`
   - `CoderDryRunAgent.dry_run`
+  - `CoderDiffPreviewAgent.preview_diff`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -276,6 +286,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - execution preflight API tests
   - execution handoff API tests
   - coder dry-run API tests
+  - coder diff-preview API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 - Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
 - Project context status: backend can produce deterministic structured summaries without sending project contents to Ollama.
@@ -286,6 +297,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Execution Preflight status: backend can read an approved persisted workflow, verify fingerprint/workspace/file assumptions, detect relevant changes after approval, and return a read-only handoff decision for a future Coding Agent.
 - Coding Agent Handoff status: backend can create a read-only, structured handoff contract only after approval and ready preflight, while keeping execution disabled.
 - Coding Agent Dry-Run status: backend can simulate future Coding Agent operations from a valid handoff through Ollama while keeping every mutation capability disabled.
+- Coding Diff Preview status: backend can preview exact unified diffs from valid dry-runs while keeping every mutation capability disabled.
 
 ## Current Frontend Status
 
@@ -334,6 +346,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Controlled execution preflight is implemented in read-only mode.
 - Controlled Coding Agent handoff contract is implemented in read-only mode.
 - Controlled Coding Agent dry-run is implemented in zero-write mode.
+- Read-only Coding Agent diff preview is implemented in zero-write mode.
 - Planned future agents include Coding, Improvement, Security, Performance, Documentation, WordPress, WooCommerce, Shopify, PHP, JavaScript, HTML/CSS, and API agents.
 - Execution/coding agents should wait until approval gates, audit logging, and read-only workflow confidence are stronger.
 
@@ -373,7 +386,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 115 tests passed.
+- Backend pytest: PASS, 125 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -458,6 +471,17 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Coder dry-run invalid workflow ID handling: PASS with `404`.
 - Coder dry-run common model operation alias normalization: PASS.
 - Live `POST /api/v1/agents/coder/dry-run`: PASS with real Ollama response from approved handoff; no writes or command execution occurred.
+- `POST /api/v1/agents/coder/diff-preview`: PASS for modify-file diff.
+- Coder diff-preview create-file diff: PASS.
+- Coder diff-preview delete-file diff with explicitly approved delete operation: PASS.
+- Coder diff-preview unchanged content warning: PASS.
+- Coder diff-preview stale dry-run blocking: PASS with `409`.
+- Coder diff-preview disallowed path blocking: PASS with `409`.
+- Coder diff-preview secret/ignored path blocking: PASS with `409`.
+- Coder diff-preview binary-file protection: PASS with `409`.
+- Coder diff-preview large-file protection: PASS with `409`.
+- Coder diff-preview malformed Ollama proposal handling: PASS with clear `502`.
+- Live `POST /api/v1/agents/coder/diff-preview`: PASS with real Ollama proposal and Python-generated unified diff; no writes or command execution occurred.
 - `POST /api/v1/agents/validator`: PASS with mocked `READY` result.
 - Validator `READY_WITH_WARNINGS` result: PASS.
 - Validator `BLOCKED` result: PASS.
@@ -518,6 +542,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 23 execution preflight checkpoint is verified, committed, and pushed.
 - Step 24 Coding Agent handoff contract checkpoint is verified, committed, and pushed.
 - Step 25 Coding Agent dry-run checkpoint is verified, committed, and pushed.
+- Step 26 Coding diff-preview checkpoint is verified and ready to push.
+- Step 26 focused diff-preview test initially failed because the Windows text fixture translated newlines; fixed by writing fixture contents as bytes for platform-stable diff assertions.
 - First live Step 25 dry-run attempt reached approved workflow and handoff successfully but returned `502` because the model output did not match the strict dry-run schema; added narrow normalization for common harmless model variations and the live retry passed.
 - First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
 - First Step 23 FastAPI live-server attempt used the repo-level `.venv` and failed on missing backend dependency `httpx2`; restarted successfully with the absolute backend venv path.
@@ -566,6 +592,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 3a24526 - feat: add execution preflight workflow
 - 7d76224 - feat: add coding agent handoff contract
 - ea20088 - feat: add coder dry-run layer
+- Step 26 checkpoint pending - feat: add coder diff preview
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -592,9 +619,10 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - `backend/app/agents/coder.py`
 - `backend/app/api/v1/endpoints/coder.py`
-- `backend/app/api/v1/router.py`
 - `backend/app/models/coder.py`
-- `backend/tests/test_coder_dry_run_api.py`
+- `backend/app/models/execution_handoff.py`
+- `backend/app/services/execution_handoff.py`
+- `backend/tests/test_coder_diff_preview_api.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -607,13 +635,13 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add a minimal frontend panel for workflow history, preflight, handoff, and coder dry-run, or build a dry-run diff preview that still performs no writes.
+Recommended next task: add a minimal frontend panel for workflow history, preflight, handoff, dry-run, and diff preview, or add a read-only execution-readiness dashboard.
 
 ## Next Files Likely to Change
 
-- frontend Planning Workflow history/preflight/handoff/dry-run UI
+- frontend Planning Workflow history/preflight/handoff/dry-run/diff-preview UI
 - `frontend/lib/api-client.ts`
-- future backend dry-run diff preview models/services
+- future backend execution-readiness dashboard models/services
 
 ## Do Not Forget
 

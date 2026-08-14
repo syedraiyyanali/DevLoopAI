@@ -24,7 +24,11 @@ class ExecutionHandoffService:
     Creates a read-only handoff contract for a future Coding Agent.
     """
 
-    allowed_operation_types = ["read_file", "create_text_file", "modify_text_file"]
+    default_allowed_operation_types = [
+        "read_file",
+        "create_text_file",
+        "modify_text_file",
+    ]
 
     def __init__(
         self,
@@ -79,7 +83,7 @@ class ExecutionHandoffService:
                 ]
             ),
             allowed_files=allowed_files,
-            allowed_operation_types=list(self.allowed_operation_types),
+            allowed_operation_types=self._allowed_operation_types(record),
             expected_tests=self._expected_tests(record),
             warnings=self._unique(
                 [
@@ -170,6 +174,26 @@ class ExecutionHandoffService:
                 *record.final_reviewed_summary.tests_expected,
             ]
         )
+
+    def _allowed_operation_types(
+        self,
+        record: PlanningWorkflowHistoryRecord,
+    ) -> list[str]:
+        operation_types = list(self.default_allowed_operation_types)
+        approved_plan_text = " ".join(
+            [
+                record.planner_output.task_summary,
+                *record.planner_output.implementation_steps,
+                *record.reviewer_output.recommended_improvements,
+                *record.validator_output.plan_completeness,
+                record.final_reviewed_summary.summary,
+            ]
+        ).lower()
+
+        if "delete" in approved_plan_text or "remove" in approved_plan_text:
+            operation_types.append("delete_text_file")
+
+        return operation_types
 
     def _unique(self, values: list[str]) -> list[str]:
         seen = set()

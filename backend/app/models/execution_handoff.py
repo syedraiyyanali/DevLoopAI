@@ -6,7 +6,12 @@ from app.models.execution_preflight import ExecutionPreflightResponse
 from app.models.planning_workflow import ApprovalStatus
 
 
-AllowedOperationType = Literal["read_file", "create_text_file", "modify_text_file"]
+AllowedOperationType = Literal[
+    "read_file",
+    "create_text_file",
+    "modify_text_file",
+    "delete_text_file",
+]
 
 
 class ExecutionHandoffRequest(BaseModel):

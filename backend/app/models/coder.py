@@ -58,3 +58,57 @@ class CoderDryRunResponse(BaseModel):
     execution_performed: bool = False
     mutation_capabilities_enabled: bool = False
     message: str
+
+
+class CoderDiffPreviewRequest(BaseModel):
+    """
+    Request body for previewing exact dry-run file changes.
+    """
+    dry_run: CoderDryRunResponse
+    model: str | None = None
+
+
+class CoderDiffProposalFileChange(BaseModel):
+    """
+    Model-proposed content for one approved file operation.
+    """
+    relative_path: str = Field(..., min_length=1)
+    proposed_content: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CoderDiffProposalPayload(BaseModel):
+    """
+    Strict model proposal shape for diff preview content.
+    """
+    file_changes: list[CoderDiffProposalFileChange] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+
+
+class CoderFileDiffPreview(BaseModel):
+    """
+    Read-only preview for one file change.
+    """
+    relative_path: str
+    operation_type: AllowedOperationType
+    current_content: str | None = None
+    proposed_content: str | None = None
+    unified_diff: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CoderDiffPreviewResponse(BaseModel):
+    """
+    Zero-write diff preview generated from a valid dry-run.
+    """
+    workflow_id: str
+    approved_plan_fingerprint: str
+    workspace_path: str
+    file_previews: list[CoderFileDiffPreview] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    model: str
+    execution_performed: bool = False
+    mutation_capabilities_enabled: bool = False
+    message: str
