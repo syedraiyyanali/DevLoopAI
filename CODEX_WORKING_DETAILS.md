@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 02:45:00 +05:00
+Time: 03:10:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 26 Coding diff preview checkpoint pushed
-Working Tree: clean after Step 26 checkpoint
-Last Push: Step 26 checkpoint pushed to origin/main
+Latest Commit: Step 27 frontend execution review panel checkpoint ready to push
+Working Tree: clean after Step 27 checkpoint
+Last Push: Step 27 checkpoint ready for origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Read-Only Coding Diff Preview
+Sprint: Sprint 1 - Frontend Execution Review Panel
 
 ## Current Step
 
-Step: Sprint 1 - Step 26: Read-Only Coding Diff Preview
+Step: Sprint 1 - Step 27: Frontend Execution Review Panel
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added a zero-write Coding Agent diff-preview layer.
+Added a frontend execution review panel for the safe pipeline.
 
 ## Current Goal
 
-Commit and push the Step 26 Coding diff-preview checkpoint.
+Commit and push the Step 27 frontend execution review panel checkpoint.
 
 ## What Has Been Completed
 
@@ -189,6 +189,17 @@ Commit and push the Step 26 Coding diff-preview checkpoint.
 - Expanded the operation type contract to include `delete_text_file`, but the handoff service only exposes it when the approved plan explicitly mentions delete/remove.
 - Added backend tests for modify-file diff, create-file diff, delete-file diff, unchanged content warning, stale dry-run blocking, disallowed path blocking, secret/ignored path blocking, binary-file protection, large-file protection, and malformed Ollama proposal handling.
 - Live Ollama diff-preview verification passed using the approved README-only handoff; diff preview returned one `README.md` modify preview with a Python-generated unified diff and `execution_performed: false`.
+- Added a frontend `ExecutionReviewPanel` to expose the existing safe execution pipeline without adding any mutation capability.
+- The panel lists persisted planning workflows, opens selected workflow records, shows task, workflow ID, approval status, fingerprint, Planner/Reviewer/Validator summaries, and final workflow status.
+- The panel shows the visual progression `Planning -> Approval -> Preflight -> Handoff -> Dry Run -> Diff`.
+- The panel can run and display execution preflight, generate/display execution handoff, run/display coder dry-run, and run/display diff preview through existing backend APIs.
+- Diff preview UI displays file path, operation type, current content, proposed content, unified diff, file warnings, global warnings, and blockers.
+- Frontend actions are disabled until the prior safe state exists; no Execute button was added.
+- Added frontend API client types/functions for execution preflight, handoff, coder dry-run, and coder diff-preview.
+- Added clear UI copy: `Preview only - no project files have been modified.`
+- Verified the Next.js route renders the Execution Review panel through the running dev server.
+- Live API verification confirmed workflow history loads, approved and blocked workflows are available, selected workflow retrieval works, preflight returns `READY_FOR_EXECUTION`, and handoff generation returns allowed files.
+- Live dry-run/diff progression could not complete during Step 27 because direct Ollama generation returned CUDA out-of-memory during model startup; backend dry-run/diff functionality remains covered by tests and prior live Step 25/26 verification.
 
 ## Current Architecture
 
@@ -310,6 +321,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `frontend/components/planner-panel.tsx` submits read-only planning requests and displays structured planner output.
   - `frontend/components/reviewer-panel.tsx` submits planner JSON for read-only review and displays structured reviewer output.
   - `frontend/components/planning-workflow-panel.tsx` runs the combined read-only planning workflow and displays final execution readiness, approval status, explicit Approve/Reject controls, blockers, warnings, required changes, risks, tests, planner steps, and Validator readiness.
+  - `frontend/components/execution-review-panel.tsx` lists planning workflow history and steps through preflight, handoff, dry-run, and diff preview in preview-only mode.
   - `frontend/components/validator-panel.tsx` validates pasted planner/reviewer JSON and displays structured readiness output.
   - `frontend/components/chat-panel.tsx` streams messages through `POST /api/v1/chat/stream`, keeps a local conversation history, and falls back to non-streaming chat when the stream cannot start.
   - `frontend/lib/api-client.ts` centralizes frontend API calls, workspace calls, and NDJSON stream parsing.
@@ -482,6 +494,15 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Coder diff-preview large-file protection: PASS with `409`.
 - Coder diff-preview malformed Ollama proposal handling: PASS with clear `502`.
 - Live `POST /api/v1/agents/coder/diff-preview`: PASS with real Ollama proposal and Python-generated unified diff; no writes or command execution occurred.
+- Frontend execution review panel lint: PASS.
+- Frontend execution review panel production build: PASS.
+- Backend regression after frontend integration: PASS, 125 tests passed.
+- Next.js dev server route render for Execution Review panel: PASS.
+- Live execution review API history load: PASS.
+- Live execution review workflow selection data: PASS for approved workflow and blocked workflow.
+- Live execution review preflight action: PASS with `READY_FOR_EXECUTION`.
+- Live execution review handoff action: PASS with approved allowed files.
+- Live execution review dry-run/diff action: SKIPPED/BLOCKED by Ollama CUDA out-of-memory during model startup in this session.
 - `POST /api/v1/agents/validator`: PASS with mocked `READY` result.
 - Validator `READY_WITH_WARNINGS` result: PASS.
 - Validator `BLOCKED` result: PASS.
@@ -543,6 +564,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 24 Coding Agent handoff contract checkpoint is verified, committed, and pushed.
 - Step 25 Coding Agent dry-run checkpoint is verified, committed, and pushed.
 - Step 26 Coding diff-preview checkpoint is verified, committed, and pushed.
+- Step 27 frontend execution review panel checkpoint is verified and ready to push.
+- Step 27 browser automation with headless Chrome was attempted, but shell policy blocked the Chrome launch commands. Static Next.js route render and live API verification were completed instead.
+- Step 27 live dry-run/diff UI progression could not be completed because Ollama returned CUDA out-of-memory for direct generation and backend dry-run generation. This is a local model runtime/resource issue, not a confirmed frontend source defect.
 - Step 26 focused diff-preview test initially failed because the Windows text fixture translated newlines; fixed by writing fixture contents as bytes for platform-stable diff assertions.
 - First live Step 25 dry-run attempt reached approved workflow and handoff successfully but returned `502` because the model output did not match the strict dry-run schema; added narrow normalization for common harmless model variations and the live retry passed.
 - First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
@@ -593,6 +617,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 7d76224 - feat: add coding agent handoff contract
 - ea20088 - feat: add coder dry-run layer
 - 6d1a778 - feat: add coder diff preview
+- Step 27 checkpoint pending - feat: add execution review frontend panel
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -617,12 +642,9 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/agents/coder.py`
-- `backend/app/api/v1/endpoints/coder.py`
-- `backend/app/models/coder.py`
-- `backend/app/models/execution_handoff.py`
-- `backend/app/services/execution_handoff.py`
-- `backend/tests/test_coder_diff_preview_api.py`
+- `frontend/app/page.tsx`
+- `frontend/components/execution-review-panel.tsx`
+- `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -635,13 +657,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add a minimal frontend panel for workflow history, preflight, handoff, dry-run, and diff preview, or add a read-only execution-readiness dashboard.
+Recommended next task: Sprint 1 Step 28 - Controlled File Mutation with Snapshot Backup and Rollback, gated by approved workflow, successful preflight, canonical handoff, and reviewed diff.
 
 ## Next Files Likely to Change
 
-- frontend Planning Workflow history/preflight/handoff/dry-run/diff-preview UI
-- `frontend/lib/api-client.ts`
-- future backend execution-readiness dashboard models/services
+- backend snapshot/backup models and services
+- backend controlled mutation API
+- backend rollback API
+- tests for mutation gating, snapshots, and rollback
 
 ## Do Not Forget
 

@@ -189,6 +189,7 @@ export interface PlanningWorkflowResponse {
 export interface PlanningWorkflowHistoryItem {
   workflow_id: string;
   user_task: string;
+  workspace_path: string | null;
   plan_fingerprint: string;
   approval_status: ApprovalStatus;
   approval_allowed: boolean;
@@ -208,6 +209,131 @@ export interface PlanningWorkflowHistoryRecord
   reviewer_output: ReviewerResponse;
   validator_output: ValidatorResponse;
   final_reviewed_summary: FinalReviewedPlanSummary;
+}
+
+export type ExecutionPreflightStatus =
+  | "READY_FOR_EXECUTION"
+  | "REAPPROVAL_REQUIRED"
+  | "BLOCKED";
+
+export interface FingerprintVerification {
+  stored_fingerprint: string;
+  recomputed_fingerprint: string;
+  matches: boolean;
+}
+
+export interface WorkspacePreflightStatus {
+  workspace_path: string | null;
+  exists: boolean;
+  is_directory: boolean;
+  status: string;
+}
+
+export interface PreflightFileCheck {
+  relative_path: string;
+  exists: boolean;
+  kind: "file" | "directory" | "missing" | "blocked";
+  size_bytes: number | null;
+  modified_after_approval: boolean | null;
+  note: string;
+}
+
+export interface ExecutionPreflightResponse {
+  workflow_id: string;
+  approval_status: ApprovalStatus;
+  status: ExecutionPreflightStatus;
+  fingerprint: FingerprintVerification;
+  workspace: WorkspacePreflightStatus;
+  file_checks: PreflightFileCheck[];
+  detected_changes: string[];
+  warnings: string[];
+  blockers: string[];
+  execution_readiness: string;
+  reapproval_reason: string | null;
+}
+
+export type AllowedOperationType =
+  | "read_file"
+  | "create_text_file"
+  | "modify_text_file"
+  | "delete_text_file";
+
+export interface ApprovalMetadata {
+  approval_status: ApprovalStatus;
+  approved_at: string | null;
+  approval_reason: string;
+}
+
+export interface RollbackBackupRequirements {
+  backup_required: boolean;
+  rollback_plan_required: boolean;
+  requirements: string[];
+}
+
+export interface ExecutionHandoffResponse {
+  workflow_id: string;
+  approved_plan_fingerprint: string;
+  workspace_path: string;
+  preflight_result: ExecutionPreflightResponse;
+  approved_planned_changes: string[];
+  allowed_files: string[];
+  allowed_operation_types: AllowedOperationType[];
+  expected_tests: string[];
+  warnings: string[];
+  blockers: string[];
+  rollback_backup_requirements: RollbackBackupRequirements;
+  user_approval_metadata: ApprovalMetadata;
+  execution_allowed: boolean;
+  message: string;
+}
+
+export interface CoderDryRunOperation {
+  operation_type: AllowedOperationType;
+  relative_path: string;
+  description: string;
+  rationale: string;
+}
+
+export interface CoderDryRunResponse {
+  workflow_id: string;
+  approved_plan_fingerprint: string;
+  workspace_path: string;
+  files_would_modify: string[];
+  files_would_create: string[];
+  files_would_delete: string[];
+  intended_operations: CoderDryRunOperation[];
+  proposed_code_change_summary: string;
+  dependencies_required: string[];
+  tests_to_run: string[];
+  rollback_backup_plan: string[];
+  warnings: string[];
+  blockers: string[];
+  model: string;
+  execution_performed: boolean;
+  mutation_capabilities_enabled: boolean;
+  message: string;
+}
+
+export interface CoderFileDiffPreview {
+  relative_path: string;
+  operation_type: AllowedOperationType;
+  current_content: string | null;
+  proposed_content: string | null;
+  unified_diff: string;
+  warnings: string[];
+}
+
+export interface CoderDiffPreviewResponse {
+  workflow_id: string;
+  approved_plan_fingerprint: string;
+  workspace_path: string;
+  file_previews: CoderFileDiffPreview[];
+  warnings: string[];
+  blockers: string[];
+  model: string;
+  execution_performed: boolean;
+  mutation_capabilities_enabled: boolean;
+  message: string;
 }
 
 type ChatStreamEvent =
@@ -509,6 +635,65 @@ export async function getPlanningWorkflowHistory(
   return requestJson<PlanningWorkflowHistoryRecord>(
     `/workflows/planning/${encodeURIComponent(workflowId)}`,
   );
+}
+
+export async function runExecutionPreflight(
+  workflowId: string,
+): Promise<ExecutionPreflightResponse> {
+  return requestJson<ExecutionPreflightResponse>(
+    "/workflows/execution/preflight",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        workflow_id: workflowId,
+      }),
+    },
+  );
+}
+
+export async function createExecutionHandoff(
+  workflowId: string,
+): Promise<ExecutionHandoffResponse> {
+  return requestJson<ExecutionHandoffResponse>("/workflows/execution/handoff", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workflow_id: workflowId,
+    }),
+  });
+}
+
+export async function runCoderDryRun(
+  handoff: ExecutionHandoffResponse,
+): Promise<CoderDryRunResponse> {
+  return requestJson<CoderDryRunResponse>("/agents/coder/dry-run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      handoff,
+    }),
+  });
+}
+
+export async function runCoderDiffPreview(
+  dryRun: CoderDryRunResponse,
+): Promise<CoderDiffPreviewResponse> {
+  return requestJson<CoderDiffPreviewResponse>("/agents/coder/diff-preview", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      dry_run: dryRun,
+    }),
+  });
 }
 
 export async function validateReviewedPlan(

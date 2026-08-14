@@ -1,5 +1,6 @@
 import BackendStatus from "../components/backend-status";
 import ChatPanel from "../components/chat-panel";
+import ExecutionReviewPanel from "../components/execution-review-panel";
 import OllamaStatusPanel from "../components/ollama-status";
 import PlannerPanel from "../components/planner-panel";
 import PlanningWorkflowPanel from "../components/planning-workflow-panel";
@@ -49,6 +50,8 @@ export default function Home() {
         <ReviewerPanel />
 
         <PlanningWorkflowPanel />
+
+        <ExecutionReviewPanel />
 
         <ValidatorPanel />
 
