@@ -124,6 +124,10 @@ class PlanningWorkflow:
             final_reviewed_summary=final_reviewed_summary,
             approval=self.approval_store.create_gate(
                 task=request.task,
+                workspace_path=self._workspace_path_for_record(
+                    request=request,
+                    project_context=project_context,
+                ),
                 planner_output=planner_output,
                 reviewer_output=reviewer_output,
                 validator_output=validator_output,
@@ -143,6 +147,20 @@ class PlanningWorkflow:
             return None
 
         return self.workspace_service.summarize_context(request.workspace_path)
+
+    def _workspace_path_for_record(
+        self,
+        *,
+        request: PlanningWorkflowRequest,
+        project_context: WorkspaceContextSummary | None,
+    ) -> str | None:
+        if request.workspace_path is not None:
+            return request.workspace_path
+
+        if request.project_context is not None and project_context is not None:
+            return project_context.workspace.root_path
+
+        return None
 
     def _agent_model(
         self,

@@ -99,6 +99,7 @@ class PlanningWorkflowHistoryItem(BaseModel):
     """
     workflow_id: str
     user_task: str
+    workspace_path: str | None = None
     plan_fingerprint: str
     approval_status: ApprovalStatus
     approval_allowed: bool

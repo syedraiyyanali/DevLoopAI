@@ -56,6 +56,7 @@ class PlanningApprovalStore:
         self,
         *,
         task: str,
+        workspace_path: str | None = None,
         planner_output: PlannerResponse,
         reviewer_output: ReviewerResponse,
         validator_output: ValidatorResponse,
@@ -85,6 +86,7 @@ class PlanningApprovalStore:
                 INSERT INTO planning_workflows (
                     workflow_id,
                     user_task,
+                    workspace_path,
                     planner_output_json,
                     reviewer_output_json,
                     validator_output_json,
@@ -97,11 +99,12 @@ class PlanningApprovalStore:
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     workflow_id,
                     task,
+                    workspace_path,
                     self._dump_model(planner_output),
                     self._dump_model(reviewer_output),
                     self._dump_model(validator_output),
@@ -225,6 +228,7 @@ class PlanningApprovalStore:
                 """
                 SELECT workflow_id,
                        user_task,
+                       workspace_path,
                        plan_fingerprint,
                        approval_status,
                        approval_allowed,
@@ -276,6 +280,7 @@ class PlanningApprovalStore:
                 CREATE TABLE IF NOT EXISTS planning_workflows (
                     workflow_id TEXT PRIMARY KEY,
                     user_task TEXT NOT NULL,
+                    workspace_path TEXT,
                     planner_output_json TEXT NOT NULL,
                     reviewer_output_json TEXT NOT NULL,
                     validator_output_json TEXT NOT NULL,
@@ -290,6 +295,11 @@ class PlanningApprovalStore:
                     approval_decided_at TEXT
                 )
                 """
+            )
+            self._ensure_column(
+                connection,
+                column_name="workspace_path",
+                column_definition="workspace_path TEXT",
             )
             connection.execute(
                 """
@@ -386,6 +396,7 @@ class PlanningApprovalStore:
         return PlanningWorkflowHistoryItem(
             workflow_id=row["workflow_id"],
             user_task=row["user_task"],
+            workspace_path=row["workspace_path"],
             plan_fingerprint=row["plan_fingerprint"],
             approval_status=row["approval_status"],
             approval_allowed=bool(row["approval_allowed"]),
@@ -399,6 +410,7 @@ class PlanningApprovalStore:
         return PlanningWorkflowHistoryRecord(
             workflow_id=row["workflow_id"],
             user_task=row["user_task"],
+            workspace_path=row["workspace_path"],
             planner_output=PlannerResponse.model_validate(
                 self._load_json(row["planner_output_json"])
             ),
@@ -436,3 +448,20 @@ class PlanningApprovalStore:
             return connection.execute(
                 "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
             ).fetchone()[0]
+
+    def _ensure_column(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        column_name: str,
+        column_definition: str,
+    ) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(planning_workflows)")
+        }
+
+        if column_name not in columns:
+            connection.execute(
+                f"ALTER TABLE planning_workflows ADD COLUMN {column_definition}"
+            )

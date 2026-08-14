@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 01:10:00 +05:00
+Time: 01:30:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: e8d7b5c - docs: update step 22 working details
-Working Tree: live Ollama verification notes pending
-Last Push: e8d7b5c pushed to origin/main
+Latest Commit: Step 23 checkpoint - feat: add execution preflight workflow
+Working Tree: Step 23 changes tested; commit/push pending
+Last Push: Step 23 checkpoint pending
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Persistent Planning Workflow History Verification
+Sprint: Sprint 1 - Controlled Execution Preflight
 
 ## Current Step
 
-Step: Sprint 1 - Step 22: Real Ollama Re-Verification
+Step: Sprint 1 - Step 23: Controlled Execution Preflight
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Re-ran real DevLoopAI Planner -> Reviewer -> Validator -> Planning Workflow checks against fixed Ollama 0.32.12.
+Added read-only execution preflight for approved persisted planning workflows.
 
 ## Current Goal
 
-Update live Ollama verification status and push the documentation checkpoint.
+Commit and push the Step 23 execution preflight checkpoint.
 
 ## What Has Been Completed
 
@@ -160,6 +160,12 @@ Update live Ollama verification status and push the documentation checkpoint.
 - Re-ran real DevLoopAI `POST /api/v1/workflows/planning` successfully against Ollama.
 - Verified real workflow approval with `POST /api/v1/workflows/planning/approve`.
 - Verified persisted history retrieval with `GET /api/v1/workflows/planning/{workflow_id}` after real workflow approval.
+- Added `POST /api/v1/workflows/execution/preflight` for read-only controlled execution preflight.
+- Added persisted `workspace_path` support to planning workflow history records, with a safe SQLite column migration for existing local databases.
+- Execution preflight now loads an exact persisted workflow record, requires `APPROVED`, recomputes the stored SHA-256 plan fingerprint, checks workspace availability, checks files likely to change, detects relevant file changes after approval, compares safe project-context signals, and returns `READY_FOR_EXECUTION`, `REAPPROVAL_REQUIRED`, or `BLOCKED`.
+- Execution preflight remains fully read-only; it does not modify files, run commands, install dependencies, commit, or execute the plan.
+- Added backend tests for approved valid preflight, unapproved workflow blocking, rejected workflow blocking, stale fingerprint reapproval, missing workspace blocking, changed relevant files, missing validated files, invalid workflow IDs, and persistence across store reinitialization.
+- Live API verification passed against Ollama 0.32.12: real Planner -> Reviewer -> Validator workflow produced an approvable plan, approval succeeded, and `POST /api/v1/workflows/execution/preflight` returned `READY_FOR_EXECUTION`.
 
 ## Current Architecture
 
@@ -217,6 +223,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `POST /api/v1/workflows/planning/reject`
   - `GET /api/v1/workflows/planning`
   - `GET /api/v1/workflows/planning/{workflow_id}`
+  - `POST /api/v1/workflows/execution/preflight`
   - `GET /docs`
 - Services implemented:
   - `OllamaService.get_status`
@@ -235,6 +242,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - `PlanningApprovalStore.reject`
   - `PlanningApprovalStore.list_workflows`
   - `PlanningApprovalStore.get_workflow`
+  - `ExecutionPreflightService.run`
 - Tests implemented:
   - configuration tests
   - API foundation tests
@@ -246,6 +254,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
   - reviewer API tests
   - validator API tests
   - planning workflow API tests
+  - execution preflight API tests
 - Ollama integration status: backend can check Ollama, generate non-streaming chat responses, and stream chat responses with `qwen2.5-coder:7b`.
 - Workspace integration status: backend can inspect selected local project folders in read-only mode with safety restrictions.
 - Project context status: backend can produce deterministic structured summaries without sending project contents to Ollama.
@@ -253,6 +262,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Reviewer Agent status: backend can critique planner output in read-only mode and return validated approval recommendations.
 - Validator Agent status: backend can validate reviewed plans in read-only mode before any future execution.
 - Planning Workflow status: backend can orchestrate read-only Planner -> Reviewer -> Validator, persist the audit record to SQLite, return a final execution decision, and require explicit user approval before any future execution.
+- Execution Preflight status: backend can read an approved persisted workflow, verify fingerprint/workspace/file assumptions, detect relevant changes after approval, and return a read-only handoff decision for a future Coding Agent.
 
 ## Current Frontend Status
 
@@ -298,6 +308,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Combined Planning Workflow now runs Planner -> Reviewer -> Validator and returns a final read-only execution decision.
 - Explicit user approval gate is implemented for reviewed/validated plans in read-only mode.
 - Persistent SQLite planning workflow history/audit trail is implemented.
+- Controlled execution preflight is implemented in read-only mode.
 - Planned future agents include Coding, Improvement, Security, Performance, Documentation, WordPress, WooCommerce, Shopify, PHP, JavaScript, HTML/CSS, and API agents.
 - Execution/coding agents should wait until approval gates, audit logging, and read-only workflow confidence are stronger.
 
@@ -337,7 +348,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Tests Completed
 
-- Backend pytest: PASS, 89 tests passed.
+- Backend pytest: PASS, 98 tests passed.
 - FastAPI startup via Uvicorn: PASS.
 - `GET /`: PASS.
 - `GET /health`: PASS.
@@ -392,6 +403,17 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planning workflow invalid persisted workflow ID handling: PASS with `404`.
 - Planning workflow history list ordering newest-first: PASS.
 - Planning workflow history responses do not expose approval tokens: PASS.
+- `POST /api/v1/workflows/execution/preflight`: PASS for approved valid workflow -> `READY_FOR_EXECUTION`.
+- Execution preflight unapproved workflow handling: PASS with `BLOCKED`.
+- Execution preflight rejected workflow handling: PASS with `BLOCKED`.
+- Execution preflight stale fingerprint handling: PASS with `REAPPROVAL_REQUIRED`.
+- Execution preflight missing workspace handling: PASS with `BLOCKED`.
+- Execution preflight relevant file changed after approval handling: PASS with `REAPPROVAL_REQUIRED`.
+- Execution preflight validated file missing handling: PASS with `REAPPROVAL_REQUIRED`.
+- Execution preflight invalid workflow ID handling: PASS with `404`.
+- Execution preflight persisted workflow survives store reinitialization: PASS.
+- Live `POST /api/v1/workflows/execution/preflight`: PASS with real Ollama-generated, approved workflow returning `READY_FOR_EXECUTION`.
+- Live blocked-plan safety check: PASS; first real Ollama workflow was blocked by Validator and approval was refused.
 - `POST /api/v1/agents/validator`: PASS with mocked `READY` result.
 - Validator `READY_WITH_WARNINGS` result: PASS.
 - Validator `BLOCKED` result: PASS.
@@ -449,6 +471,10 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - None currently blocking.
 - Step 22 persistence checkpoint is verified, committed, and pushed.
 - Prior local Ollama loader issue is resolved after update to `0.32.12`; real DevLoopAI Planner -> Reviewer -> Validator -> Workflow verification now passes.
+- Step 23 execution preflight checkpoint is verified and ready to commit/push.
+- First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
+- First Step 23 FastAPI live-server attempt used the repo-level `.venv` and failed on missing backend dependency `httpx2`; restarted successfully with the absolute backend venv path.
+- First real Step 23 Ollama workflow was correctly blocked by Validator because the model plan omitted verification details; a second constrained workflow was approvable and preflight returned `READY_FOR_EXECUTION`.
 - One individual Validator retry returned malformed model JSON and DevLoopAI safely surfaced a `502`; a subsequent real Validator run passed with `READY_WITH_WARNINGS`.
 - Browser approval CDP retry timed out again; API approval/history flow passed and frontend build/lint passed.
 - Browser approval automation with real Ollama workflow timed out after the backend completed the workflow; API approval flow passed, frontend build/lint passed, and the temporary browser script was removed.
@@ -490,6 +516,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Git Commits From Recent Work
 
 - 646a0d6 - feat: persist planning workflow history
+- Step 23 checkpoint - feat: add execution preflight workflow
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -514,15 +541,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `.gitignore`
-- `backend/.env.example`
-- `backend/app/api/v1/endpoints/planning_workflow.py`
-- `backend/app/core/config.py`
+- `backend/app/api/v1/endpoints/execution_preflight.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/models/execution_preflight.py`
 - `backend/app/models/planning_workflow.py`
+- `backend/app/services/execution_preflight.py`
 - `backend/app/services/planning_approval.py`
 - `backend/app/workflows/planning.py`
-- `backend/tests/test_planning_workflow_api.py`
-- `frontend/lib/api-client.ts`
+- `backend/tests/test_execution_preflight_api.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -535,14 +561,13 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: add a frontend history panel or build the first controlled execution preflight that only reads approved persisted workflow records.
+Recommended next task: add a minimal frontend Planning Workflow history/preflight panel, or begin designing the future Coding Agent handoff contract without execution.
 
 ## Next Files Likely to Change
 
-- frontend Planning Workflow history UI
-- backend execution preflight models/services
-- backend execution preflight API endpoints
+- frontend Planning Workflow history/preflight UI
 - `frontend/lib/api-client.ts`
+- future backend Coding Agent handoff models/services
 
 ## Do Not Forget
 

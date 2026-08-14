@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     chat,
+    execution_preflight,
     ollama,
     planner,
     planning_workflow,
@@ -51,5 +52,10 @@ api_router.include_router(
 
 api_router.include_router(
     planning_workflow.router,
+    tags=["Workflows"],
+)
+
+api_router.include_router(
+    execution_preflight.router,
     tags=["Workflows"],
 )
