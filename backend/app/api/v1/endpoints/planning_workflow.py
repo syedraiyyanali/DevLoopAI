@@ -8,6 +8,8 @@ from app.core.config import settings
 from app.models.planning_workflow import (
     PlanningApprovalActionRequest,
     PlanningApprovalActionResponse,
+    PlanningWorkflowHistoryListResponse,
+    PlanningWorkflowHistoryRecord,
     PlanningWorkflowRequest,
     PlanningWorkflowResponse,
 )
@@ -16,13 +18,17 @@ from app.services.planning_approval import (
     PlanningApprovalBlockedError,
     PlanningApprovalNotFoundError,
     PlanningApprovalStaleError,
-    planning_approval_store,
+    PlanningApprovalStore,
 )
 from app.services.workspace import WorkspaceNotFoundError, WorkspaceService
 from app.workflows.planning import PlanningWorkflow, PlanningWorkflowError
 
 
 router = APIRouter(prefix="/workflows/planning")
+
+
+def get_approval_store() -> PlanningApprovalStore:
+    return PlanningApprovalStore(settings.database_path)
 
 
 @router.post(
@@ -39,6 +45,7 @@ async def run_planning_workflow(
     """
     workspace_service = WorkspaceService()
     ollama_service = OllamaService(settings)
+    approval_store = get_approval_store()
     workflow = PlanningWorkflow(
         planner_agent=PlannerAgent(
             ollama_service=ollama_service,
@@ -50,7 +57,7 @@ async def run_planning_workflow(
             workspace_service=workspace_service,
         ),
         workspace_service=workspace_service,
-        approval_store=planning_approval_store,
+        approval_store=approval_store,
     )
 
     try:
@@ -80,7 +87,7 @@ async def approve_planning_workflow(
     Explicitly approve an exact reviewed plan. This remains read-only.
     """
     try:
-        return planning_approval_store.approve(
+        return get_approval_store().approve(
             approval_id=request.approval_id,
             approval_token=request.approval_token,
             plan_fingerprint=request.plan_fingerprint,
@@ -115,7 +122,7 @@ async def reject_planning_workflow(
     Explicitly reject an exact reviewed plan. This remains read-only.
     """
     try:
-        return planning_approval_store.reject(
+        return get_approval_store().reject(
             approval_id=request.approval_id,
             approval_token=request.approval_token,
             plan_fingerprint=request.plan_fingerprint,
@@ -133,5 +140,41 @@ async def reject_planning_workflow(
     except PlanningApprovalBlockedError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "",
+    response_model=PlanningWorkflowHistoryListResponse,
+    summary="List persisted planning workflows",
+    description="List token-free planning workflow history in newest-first order.",
+)
+async def list_planning_workflows() -> PlanningWorkflowHistoryListResponse:
+    """
+    List persisted planning workflow history without approval tokens.
+    """
+    return PlanningWorkflowHistoryListResponse(
+        workflows=get_approval_store().list_workflows()
+    )
+
+
+@router.get(
+    "/{workflow_id}",
+    response_model=PlanningWorkflowHistoryRecord,
+    summary="Get persisted planning workflow",
+    description="Get a token-free persisted planning workflow audit record.",
+)
+async def get_planning_workflow(
+    workflow_id: str,
+) -> PlanningWorkflowHistoryRecord:
+    """
+    Retrieve one persisted planning workflow audit record.
+    """
+    try:
+        return get_approval_store().get_workflow(workflow_id)
+    except PlanningApprovalNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc

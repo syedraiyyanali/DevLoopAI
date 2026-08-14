@@ -52,6 +52,7 @@ class PlanningApprovalGate(BaseModel):
     """
     Read-only user approval state for the exact reviewed plan.
     """
+    workflow_id: str
     approval_id: str
     approval_token: str
     plan_fingerprint: str
@@ -84,8 +85,41 @@ class PlanningApprovalActionResponse(BaseModel):
     """
     Response body after an explicit approval-gate action.
     """
+    workflow_id: str
     approval_id: str
     plan_fingerprint: str
     status: ApprovalStatus
     approval_allowed: bool
     message: str
+
+
+class PlanningWorkflowHistoryItem(BaseModel):
+    """
+    Token-free summary of a persisted planning workflow.
+    """
+    workflow_id: str
+    user_task: str
+    plan_fingerprint: str
+    approval_status: ApprovalStatus
+    approval_allowed: bool
+    approval_reason: str
+    created_at: str
+    updated_at: str
+    approval_decided_at: str | None = None
+
+
+class PlanningWorkflowHistoryListResponse(BaseModel):
+    """
+    Persisted planning workflow history list.
+    """
+    workflows: list[PlanningWorkflowHistoryItem] = Field(default_factory=list)
+
+
+class PlanningWorkflowHistoryRecord(PlanningWorkflowHistoryItem):
+    """
+    Full token-free persisted planning workflow audit record.
+    """
+    planner_output: PlannerResponse
+    reviewer_output: ReviewerResponse
+    validator_output: ValidatorResponse
+    final_reviewed_summary: FinalReviewedPlanSummary

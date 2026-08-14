@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     log_level: str = "INFO"
+    database_path: str = "data/devloopai.sqlite3"
 
     api_prefix: str = "/api/v1"
 

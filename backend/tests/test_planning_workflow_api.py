@@ -1,16 +1,29 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from app.agents.planner import PlannerAgent, PlannerAgentError
 from app.agents.reviewer import ReviewerAgent, ReviewerAgentError
 from app.agents.validator import ValidatorAgent, ValidatorAgentError
+from app.api.v1.endpoints import planning_workflow as planning_workflow_endpoint
 from app.main import app
 from app.models.planner import PlannerProjectContext, PlannerResponse
 from app.models.reviewer import ReviewerResponse
 from app.models.validator import ValidatorResponse
-from app.services.planning_approval import planning_approval_store
+from app.services.planning_approval import PlanningApprovalStore
 
 
 client = TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def isolated_planning_history(tmp_path, monkeypatch):
+    store = PlanningApprovalStore(tmp_path / "planning-history.sqlite3")
+    monkeypatch.setattr(
+        planning_workflow_endpoint,
+        "get_approval_store",
+        lambda: store,
+    )
+    return store
 
 
 def planner_response() -> PlannerResponse:
@@ -176,6 +189,7 @@ def test_planning_workflow_returns_planner_reviewer_and_final_summary(monkeypatc
     }
     assert body["approval"]["status"] == "PENDING_APPROVAL"
     assert body["approval"]["approval_allowed"] is True
+    assert body["approval"]["workflow_id"] == body["approval"]["approval_id"]
     assert len(body["approval"]["approval_id"]) > 10
     assert len(body["approval"]["approval_token"]) > 20
     assert len(body["approval"]["plan_fingerprint"]) == 64
@@ -407,8 +421,17 @@ def test_planning_workflow_allows_valid_explicit_approval(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert response.json()["workflow_id"] == approval["workflow_id"]
     assert response.json()["status"] == "APPROVED"
     assert response.json()["message"] == "Plan approved. No code was executed."
+
+    history_response = client.get(
+        f"/api/v1/workflows/planning/{approval['workflow_id']}"
+    )
+
+    assert history_response.status_code == 200
+    assert history_response.json()["approval_status"] == "APPROVED"
+    assert history_response.json()["approval_decided_at"] is not None
 
 
 def test_planning_workflow_allows_explicit_rejection(monkeypatch):
@@ -434,6 +457,14 @@ def test_planning_workflow_allows_explicit_rejection(monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "REJECTED"
     assert response.json()["message"] == "Plan rejected. No code was executed."
+
+    history_response = client.get(
+        f"/api/v1/workflows/planning/{approval['workflow_id']}"
+    )
+
+    assert history_response.status_code == 200
+    assert history_response.json()["approval_status"] == "REJECTED"
+    assert history_response.json()["approval_decided_at"] is not None
 
 
 def test_planning_workflow_blocks_approval_when_validator_blocks(monkeypatch):
@@ -627,18 +658,116 @@ def test_planning_workflow_cannot_reject_after_approval(monkeypatch):
     )
 
 
-def test_planning_approval_fingerprint_changes_when_plan_changes():
-    first_fingerprint = planning_approval_store.plan_fingerprint(
+def test_planning_approval_fingerprint_changes_when_plan_changes(tmp_path):
+    store = PlanningApprovalStore(tmp_path / "fingerprint.sqlite3")
+    first_fingerprint = store.plan_fingerprint(
         planner_output=planner_response(),
         reviewer_output=reviewer_response("APPROVE"),
         validator_output=validator_response("READY"),
     )
     changed_planner = planner_response()
     changed_planner.implementation_steps.append("Add a second label.")
-    changed_fingerprint = planning_approval_store.plan_fingerprint(
+    changed_fingerprint = store.plan_fingerprint(
         planner_output=changed_planner,
         reviewer_output=reviewer_response("APPROVE"),
         validator_output=validator_response("READY"),
     )
 
     assert first_fingerprint != changed_fingerprint
+
+
+def test_planning_workflow_can_be_created_and_retrieved(monkeypatch):
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_validate_plan)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    workflow_id = workflow_response.json()["approval"]["workflow_id"]
+
+    response = client.get(f"/api/v1/workflows/planning/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow_id"] == workflow_id
+    assert body["user_task"] == "Add a status label."
+    assert body["planner_output"]["task_summary"] == "Add a safe status label."
+    assert body["reviewer_output"]["approval_recommendation"] == (
+        "APPROVE_WITH_CHANGES"
+    )
+    assert body["validator_output"]["overall_validation_status"] == (
+        "READY_WITH_WARNINGS"
+    )
+    assert body["approval_status"] == "PENDING_APPROVAL"
+
+
+def test_planning_workflow_history_survives_store_reinitialization(
+    tmp_path,
+    monkeypatch,
+):
+    database_path = tmp_path / "persistent-history.sqlite3"
+    first_store = PlanningApprovalStore(database_path)
+    monkeypatch.setattr(
+        planning_workflow_endpoint,
+        "get_approval_store",
+        lambda: first_store,
+    )
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_create_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_validate_plan)
+
+    workflow_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Add a status label."},
+    )
+    workflow_id = workflow_response.json()["approval"]["workflow_id"]
+    second_store = PlanningApprovalStore(database_path)
+    monkeypatch.setattr(
+        planning_workflow_endpoint,
+        "get_approval_store",
+        lambda: second_store,
+    )
+
+    response = client.get(f"/api/v1/workflows/planning/{workflow_id}")
+
+    assert response.status_code == 200
+    assert response.json()["workflow_id"] == workflow_id
+
+
+def test_planning_workflow_history_rejects_invalid_workflow_id():
+    response = client.get("/api/v1/workflows/planning/missing-workflow")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == "Workflow id is invalid."
+
+
+def test_planning_workflow_history_list_is_newest_first(monkeypatch):
+    async def mock_first_plan(self: PlannerAgent, request) -> PlannerResponse:
+        response = planner_response()
+        response.task_summary = request.task
+        return response
+
+    monkeypatch.setattr(PlannerAgent, "create_plan", mock_first_plan)
+    monkeypatch.setattr(ReviewerAgent, "review_plan", mock_review_plan)
+    monkeypatch.setattr(ValidatorAgent, "validate_plan", mock_validate_plan)
+
+    first_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "First workflow."},
+    )
+    second_response = client.post(
+        "/api/v1/workflows/planning",
+        json={"task": "Second workflow."},
+    )
+
+    response = client.get("/api/v1/workflows/planning")
+
+    assert response.status_code == 200
+    workflows = response.json()["workflows"]
+    assert [workflow["workflow_id"] for workflow in workflows[:2]] == [
+        second_response.json()["approval"]["workflow_id"],
+        first_response.json()["approval"]["workflow_id"],
+    ]
+    assert "approval_token" not in workflows[0]

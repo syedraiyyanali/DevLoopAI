@@ -160,6 +160,7 @@ export type ApprovalStatus =
   | "BLOCKED";
 
 export interface PlanningApprovalGate {
+  workflow_id: string;
   approval_id: string;
   approval_token: string;
   plan_fingerprint: string;
@@ -169,6 +170,7 @@ export interface PlanningApprovalGate {
 }
 
 export interface PlanningApprovalActionResponse {
+  workflow_id: string;
   approval_id: string;
   plan_fingerprint: string;
   status: ApprovalStatus;
@@ -182,6 +184,30 @@ export interface PlanningWorkflowResponse {
   validator_output: ValidatorResponse;
   final_reviewed_summary: FinalReviewedPlanSummary;
   approval: PlanningApprovalGate;
+}
+
+export interface PlanningWorkflowHistoryItem {
+  workflow_id: string;
+  user_task: string;
+  plan_fingerprint: string;
+  approval_status: ApprovalStatus;
+  approval_allowed: boolean;
+  approval_reason: string;
+  created_at: string;
+  updated_at: string;
+  approval_decided_at: string | null;
+}
+
+export interface PlanningWorkflowHistoryListResponse {
+  workflows: PlanningWorkflowHistoryItem[];
+}
+
+export interface PlanningWorkflowHistoryRecord
+  extends PlanningWorkflowHistoryItem {
+  planner_output: PlannerResponse;
+  reviewer_output: ReviewerResponse;
+  validator_output: ValidatorResponse;
+  final_reviewed_summary: FinalReviewedPlanSummary;
 }
 
 type ChatStreamEvent =
@@ -471,6 +497,18 @@ export async function rejectPlanningWorkflow(
       plan_fingerprint: approval.plan_fingerprint,
     }),
   });
+}
+
+export async function listPlanningWorkflowHistory(): Promise<PlanningWorkflowHistoryListResponse> {
+  return requestJson<PlanningWorkflowHistoryListResponse>("/workflows/planning");
+}
+
+export async function getPlanningWorkflowHistory(
+  workflowId: string,
+): Promise<PlanningWorkflowHistoryRecord> {
+  return requestJson<PlanningWorkflowHistoryRecord>(
+    `/workflows/planning/${encodeURIComponent(workflowId)}`,
+  );
 }
 
 export async function validateReviewedPlan(

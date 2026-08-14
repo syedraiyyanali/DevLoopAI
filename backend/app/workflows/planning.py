@@ -123,9 +123,11 @@ class PlanningWorkflow:
             validator_output=validator_output,
             final_reviewed_summary=final_reviewed_summary,
             approval=self.approval_store.create_gate(
+                task=request.task,
                 planner_output=planner_output,
                 reviewer_output=reviewer_output,
                 validator_output=validator_output,
+                final_reviewed_summary=final_reviewed_summary,
                 blockers=final_reviewed_summary.blockers,
             ),
         )

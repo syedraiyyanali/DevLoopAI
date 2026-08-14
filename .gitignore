@@ -214,6 +214,12 @@ tempCodeRunnerFile.py
 # Browser smoke-test profiles
 .tmp-chrome-*/
 
+# Local DevLoopAI runtime storage
+backend/data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
 # Ruff stuff:
 .ruff_cache/
 
