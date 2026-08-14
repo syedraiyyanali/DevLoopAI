@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 03:10:00 +05:00
+Time: 04:10:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 27 frontend execution review panel checkpoint pushed
-Working Tree: clean after Step 27 checkpoint
+Latest Commit: Step 28 controlled file mutation checkpoint pending
+Working Tree: Step 28 verified changes ready to commit
 Last Push: Step 27 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Frontend Execution Review Panel
+Sprint: Sprint 1 - Controlled File Mutation
 
 ## Current Step
 
-Step: Sprint 1 - Step 27: Frontend Execution Review Panel
+Step: Sprint 1 - Step 28: Controlled File Mutation with Snapshot Backup and Rollback
 
-Status: COMPLETED
+Status: VERIFIED - COMMIT/PUSH PENDING
 
 ## Currently Working On
 
-Added a frontend execution review panel for the safe pipeline.
+Finalizing the verified controlled mutation, snapshot, audit, and rollback checkpoint.
 
 ## Current Goal
 
-Commit and push the Step 27 frontend execution review panel checkpoint.
+Commit and push the Step 28 controlled file mutation checkpoint.
 
 ## What Has Been Completed
 
@@ -200,6 +200,16 @@ Commit and push the Step 27 frontend execution review panel checkpoint.
 - Verified the Next.js route renders the Execution Review panel through the running dev server.
 - Live API verification confirmed workflow history loads, approved and blocked workflows are available, selected workflow retrieval works, preflight returns `READY_FOR_EXECUTION`, and handoff generation returns allowed files.
 - Live dry-run/diff progression could not complete during Step 27 because direct Ollama generation returned CUDA out-of-memory during model startup; backend dry-run/diff functionality remains covered by tests and prior live Step 25/26 verification.
+- Added immutable persisted diff-review artifacts with review IDs, timestamps, and SHA-256 fingerprints.
+- Added `POST /api/v1/workflows/execution/apply` for exact reviewed `modify_text_file` and `create_text_file` mutations.
+- Added `POST /api/v1/workflows/execution/rollback` for persisted snapshot restoration and removal of execution-created files.
+- Added SQLite audit tables for reviewed diffs, coding executions, and per-file mutation metadata.
+- Added snapshot storage under the local runtime-data directory, outside approved target workspaces and ignored by Git.
+- Added canonical handoff, approval, fingerprint, preflight, dry-run, reviewed-diff, allowed-path, allowed-operation, secret/ignored-path, binary/size, and exact unified-diff revalidation before writes.
+- Added immediate stale-content checks before each write, deterministic content hashing, atomic text replacement, post-write hash verification, and automatic rollback after multi-file partial failure.
+- Kept deletion, commands, tests, dependency installation, Git operations, and Ollama generation disabled in the mutation layer.
+- Added 17 controlled-mutation tests covering modify/create, blocking, tampering, stale review, backup/write failures, automatic rollback, explicit rollback, repeated rollback, invalid execution ID, and persistence restart.
+- Verified a disposable live `sample.txt` mutation through approved workflow, preflight, handoff, persisted deterministic review, live apply API, SQLite audit reload, live rollback API, and exact original-content restoration.
 
 ## Current Architecture
 
@@ -554,6 +564,19 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Headless browser Planning Workflow panel submit/render flow: PASS after Step 20 update.
 - Headless browser Validator panel submit/render flow: PASS.
 - Git diff whitespace check: PASS for committed backend work.
+- Step 28 full backend pytest: PASS, `142 passed`.
+- Step 28 focused controlled-mutation suite: PASS, `17 passed`.
+- Python application compile check: PASS.
+- Frontend ESLint after Step 28: PASS.
+- Frontend production build after Step 28: PASS.
+- Live disposable workflow approval: PASS with `APPROVED`.
+- Live disposable execution preflight: PASS with `READY_FOR_EXECUTION`.
+- Live disposable canonical handoff: PASS with only `sample.txt` allowed.
+- Live disposable persisted diff review: PASS with immutable review ID/fingerprint.
+- Live disposable apply API: PASS with `EXECUTED`, snapshot `CREATED`, and exact updated content.
+- Live disposable execution persistence reload: PASS with `EXECUTED` after a fresh `ExecutionStore` initialization.
+- Live disposable rollback API: PASS with `ROLLED_BACK` and exact original content restored.
+- Live real Ollama Planner retry: FAILED/BLOCKED by model startup memory allocation failure; no workflow was created and mutation safety was not weakened.
 
 ## Known Problems
 
@@ -567,6 +590,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 27 frontend execution review panel checkpoint is verified, committed, and pushed.
 - Step 27 browser automation with headless Chrome was attempted, but shell policy blocked the Chrome launch commands. Static Next.js route render and live API verification were completed instead.
 - Step 27 live dry-run/diff UI progression could not be completed because Ollama returned CUDA out-of-memory for direct generation and backend dry-run generation. This is a local model runtime/resource issue, not a confirmed frontend source defect.
+- Step 28 controlled mutation checkpoint is verified and ready to commit/push.
+- Step 28 live Ollama planning generation remained unavailable: model startup failed while allocating an 885,035,008-byte CUDA host buffer. The mutation live test used deterministic persisted review artifacts and required no Ollama call, as designed.
+- Initial Step 28 tests incorrectly declared a synthetic `Text` language, causing deterministic preflight to require reapproval; corrected the fixture context.
+- Windows universal-newline conversion initially changed snapshot/content hashes in tests; switched exact safety hashes and snapshot restoration to UTF-8 bytes.
+- Review found rollback must use the persisted execution workspace instead of rerunning preflight after the intentional mutation; corrected before rollback verification.
 - Step 26 focused diff-preview test initially failed because the Windows text fixture translated newlines; fixed by writing fixture contents as bytes for platform-stable diff assertions.
 - First live Step 25 dry-run attempt reached approved workflow and handoff successfully but returned `502` because the model output did not match the strict dry-run schema; added narrow normalization for common harmless model variations and the live retry passed.
 - First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
@@ -642,9 +670,15 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `frontend/app/page.tsx`
-- `frontend/components/execution-review-panel.tsx`
-- `frontend/lib/api-client.ts`
+- `backend/app/agents/coder.py`
+- `backend/app/api/v1/endpoints/coder.py`
+- `backend/app/api/v1/endpoints/execution_mutation.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/models/coder.py`
+- `backend/app/models/execution_mutation.py`
+- `backend/app/services/execution_mutation.py`
+- `backend/app/services/execution_store.py`
+- `backend/tests/test_execution_mutation_api.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -657,14 +691,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 28 - Controlled File Mutation with Snapshot Backup and Rollback, gated by approved workflow, successful preflight, canonical handoff, and reviewed diff.
+Recommended next task: Sprint 1 Step 29 - Controlled Post-Mutation Verification Runner with strict command allowlisting and rollback integration.
 
 ## Next Files Likely to Change
 
-- backend snapshot/backup models and services
-- backend controlled mutation API
-- backend rollback API
-- tests for mutation gating, snapshots, and rollback
+- backend verification command policy and schemas
+- backend controlled verification service/API
+- execution audit integration for verification results
+- tests for command allowlisting, timeouts, failures, and rollback policy
 
 ## Do Not Forget
 

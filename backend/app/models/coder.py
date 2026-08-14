@@ -112,3 +112,6 @@ class CoderDiffPreviewResponse(BaseModel):
     execution_performed: bool = False
     mutation_capabilities_enabled: bool = False
     message: str
+    review_id: str | None = None
+    review_fingerprint: str | None = None
+    reviewed_at: str | None = None

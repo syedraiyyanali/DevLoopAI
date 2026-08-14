@@ -20,6 +20,7 @@ from app.services.execution_handoff import (
     ExecutionHandoffBlockedError,
     ExecutionHandoffService,
 )
+from app.services.execution_store import ExecutionStore
 from app.services.ollama import OllamaService, OllamaServiceError
 from app.services.workspace import (
     WorkspaceAccessError,
@@ -348,10 +349,12 @@ class CoderDiffPreviewAgent:
         ollama_service: OllamaService,
         handoff_service: ExecutionHandoffService,
         workspace_service: WorkspaceService,
+        execution_store: ExecutionStore | None = None,
     ) -> None:
         self.ollama_service = ollama_service
         self.handoff_service = handoff_service
         self.workspace_service = workspace_service
+        self.execution_store = execution_store
 
     async def preview_diff(
         self,
@@ -393,7 +396,7 @@ class CoderDiffPreviewAgent:
             proposal=proposal,
         )
 
-        return CoderDiffPreviewResponse(
+        response = CoderDiffPreviewResponse(
             workflow_id=request.dry_run.workflow_id,
             approved_plan_fingerprint=request.dry_run.approved_plan_fingerprint,
             workspace_path=request.dry_run.workspace_path,
@@ -405,6 +408,11 @@ class CoderDiffPreviewAgent:
             mutation_capabilities_enabled=False,
             message="Diff preview generated. No files were written and no commands were run.",
         )
+
+        if self.execution_store is not None:
+            return self.execution_store.record_diff_review(response)
+
+        return response
 
     def _validate_dry_run(
         self,

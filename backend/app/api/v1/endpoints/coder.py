@@ -19,6 +19,7 @@ from app.services.execution_handoff import (
     ExecutionHandoffService,
 )
 from app.services.execution_preflight import ExecutionPreflightService
+from app.services.execution_store import ExecutionStore
 from app.services.ollama import OllamaService
 from app.services.planning_approval import (
     PlanningApprovalNotFoundError,
@@ -66,6 +67,7 @@ def get_coder_diff_preview_agent() -> CoderDiffPreviewAgent:
         ollama_service=OllamaService(settings),
         handoff_service=handoff_service,
         workspace_service=workspace_service,
+        execution_store=ExecutionStore(settings.database_path),
     )
 
 
