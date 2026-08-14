@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: `bd62595` - feat: add controlled file mutation and rollback
+Latest Commit: Step 28 working-details finalization
 Working Tree: clean after Step 28 feature commit
-Last Push: Step 27 checkpoint pushed to origin/main
+Last Push: Step 28 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -647,6 +647,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 6d1a778 - feat: add coder diff preview
 - 46ffa1c - feat: add execution review frontend panel
 - bd62595 - feat: add controlled file mutation and rollback
+- 9df36ed - docs: update step 28 working details
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
