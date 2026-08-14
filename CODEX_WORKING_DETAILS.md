@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 25 Coding Agent dry-run checkpoint ready to push
+Latest Commit: Step 25 Coding Agent dry-run checkpoint pushed
 Working Tree: clean after Step 25 checkpoint
-Last Push: Step 25 checkpoint ready for origin/main
+Last Push: Step 25 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -517,7 +517,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Prior local Ollama loader issue is resolved after update to `0.32.12`; real DevLoopAI Planner -> Reviewer -> Validator -> Workflow verification now passes.
 - Step 23 execution preflight checkpoint is verified, committed, and pushed.
 - Step 24 Coding Agent handoff contract checkpoint is verified, committed, and pushed.
-- Step 25 Coding Agent dry-run checkpoint is verified and ready to push.
+- Step 25 Coding Agent dry-run checkpoint is verified, committed, and pushed.
 - First live Step 25 dry-run attempt reached approved workflow and handoff successfully but returned `502` because the model output did not match the strict dry-run schema; added narrow normalization for common harmless model variations and the live retry passed.
 - First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
 - First Step 23 FastAPI live-server attempt used the repo-level `.venv` and failed on missing backend dependency `httpx2`; restarted successfully with the absolute backend venv path.
@@ -565,7 +565,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 646a0d6 - feat: persist planning workflow history
 - 3a24526 - feat: add execution preflight workflow
 - 7d76224 - feat: add coding agent handoff contract
-- Step 25 checkpoint pending - feat: add coder dry-run layer
+- ea20088 - feat: add coder dry-run layer
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
