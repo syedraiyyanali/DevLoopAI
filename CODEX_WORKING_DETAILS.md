@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 27 frontend execution review panel checkpoint ready to push
+Latest Commit: Step 27 frontend execution review panel checkpoint pushed
 Working Tree: clean after Step 27 checkpoint
-Last Push: Step 27 checkpoint ready for origin/main
+Last Push: Step 27 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -564,7 +564,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 24 Coding Agent handoff contract checkpoint is verified, committed, and pushed.
 - Step 25 Coding Agent dry-run checkpoint is verified, committed, and pushed.
 - Step 26 Coding diff-preview checkpoint is verified, committed, and pushed.
-- Step 27 frontend execution review panel checkpoint is verified and ready to push.
+- Step 27 frontend execution review panel checkpoint is verified, committed, and pushed.
 - Step 27 browser automation with headless Chrome was attempted, but shell policy blocked the Chrome launch commands. Static Next.js route render and live API verification were completed instead.
 - Step 27 live dry-run/diff UI progression could not be completed because Ollama returned CUDA out-of-memory for direct generation and backend dry-run generation. This is a local model runtime/resource issue, not a confirmed frontend source defect.
 - Step 26 focused diff-preview test initially failed because the Windows text fixture translated newlines; fixed by writing fixture contents as bytes for platform-stable diff assertions.
@@ -617,7 +617,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 7d76224 - feat: add coding agent handoff contract
 - ea20088 - feat: add coder dry-run layer
 - 6d1a778 - feat: add coder diff preview
-- Step 27 checkpoint pending - feat: add execution review frontend panel
+- 46ffa1c - feat: add execution review frontend panel
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
