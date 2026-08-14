@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 05:15:00 +05:00
+Time: 05:47:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 29 working-details finalization
-Working Tree: clean after Step 29 feature commit
-Last Push: Step 29 checkpoint pushed to origin/main
+Latest Commit: Step 30 frontend apply/verify/rollback controls
+Working Tree: clean after Step 30 feature commit
+Last Push: Step 30 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Post-Mutation Verification
+Sprint: Sprint 1 - Frontend Controlled Execution Review
 
 ## Current Step
 
-Step: Sprint 1 - Step 29: Strictly Allowlisted Post-Mutation Verification Runner
+Step: Sprint 1 - Step 30: Frontend Apply, Verify, and Rollback Controls
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 29 allowlisted verification runner and audit checkpoint completed.
+Step 30 frontend execution controls completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Keep the verified Step 29 checkpoint synchronized with GitHub.
+Continue from the verified Step 30 checkpoint when the next task is requested.
 
 ## What Has Been Completed
 
@@ -601,6 +601,22 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live disposable explicit rollback after failed verification: PASS; prior valid Python content restored.
 - Live disposable cleanup rollback: PASS; original `value = 1` content restored.
 - Direct Ollama generation retry after Step 29 verification: PASS with response `OK`; prior model startup memory failure was not present on this retry.
+- Added frontend API client types and functions for controlled apply, rollback, verification run, and verification history.
+- Extended `ExecutionReviewPanel` with the full lifecycle rail: `Planning -> Approval -> Preflight -> Handoff -> Dry Run -> Diff -> Apply -> Verify -> Rollback`.
+- Added explicit Apply Reviewed Changes controls gated by approved workflow, ready preflight, valid handoff, dry-run, and persisted diff review ID/fingerprint/timestamp.
+- Apply UI now shows exact reviewed files, operation types, snapshot/backup notice, mutation warning, and a deliberate browser confirmation before calling the backend apply API.
+- Added execution result rendering for execution ID, status, files attempted/changed, file hashes, backup status/location, rollback availability, timestamp, warnings, and blockers.
+- Added allowlisted verification UI for `python_compile`, `pytest`, `frontend_lint`, and `frontend_build`; no arbitrary command input was added.
+- Verification UI renders status, exit code, duration, command identity, working directory, stdout/stderr excerpts, output truncation, changed files, warnings, blockers, and rollback recommendations.
+- Added explicit Rollback Execution controls gated by rollback availability and not-yet-rolled-back state, with browser confirmation before calling the backend rollback API.
+- Rollback UI renders restored/removed files, warnings, blockers, rollback timestamp, and disables further verification after rolled-back state.
+- Step 30 frontend ESLint: PASS.
+- Step 30 frontend production build: PASS.
+- Step 30 backend regression pytest: PASS, `163 passed`.
+- Step 30 route render smoke check: PASS; Next.js route contains Execution Review, lifecycle Apply/Verify/Rollback states, and preview-only copy.
+- Live Step 30 disposable pass scenario: PASS; approved workflow selected through live APIs, preflight and handoff passed, model-backed dry-run/diff eventually applied a valid `sample.py` change, verification persisted `PASSED`, rollback persisted `ROLLED_BACK`, and `sample.py` was restored to `value = 1`.
+- Live Step 30 disposable syntax-error scenario: PASS; deterministic reviewed diff applied invalid Python, `python_compile` returned `FAILED`, rollback was recommended, explicit rollback returned `ROLLED_BACK`, and `sample.py` was restored to `value = 1`.
+- Step 30 headless Chrome click-through automation: BLOCKED by shell policy before Chrome launched; route render and live FastAPI verification were completed instead.
 
 ## Known Problems
 
@@ -615,9 +631,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 27 browser automation with headless Chrome was attempted, but shell policy blocked the Chrome launch commands. Static Next.js route render and live API verification were completed instead.
 - Step 27 live dry-run/diff UI progression could not be completed because Ollama returned CUDA out-of-memory for direct generation and backend dry-run generation. This is a local model runtime/resource issue, not a confirmed frontend source defect.
 - Step 28 controlled mutation checkpoint is verified, committed, and pushed.
-- Step 29 allowlisted verification runner is verified and ready to commit/push.
+- Step 29 allowlisted verification runner is verified, committed, and pushed.
+- Step 30 frontend controls are verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
+- Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
+- Step 30 live full UI click-through could not be completed: the model-backed dry-run/diff API chain took longer than the PowerShell timeout, and a later headless Chrome CDP launch was blocked by shell policy before Chrome started. Static route render plus live FastAPI disposable apply/verify/rollback verification were completed.
+- During the Step 30 pass scenario, the timed PowerShell pipeline did complete the backend apply after the timeout; persisted audit confirmed `EXECUTED`, verification persisted `PASSED`, rollback persisted `ROLLED_BACK`, and the disposable file was restored.
 - During Step 28, Ollama planning generation failed while allocating an 885,035,008-byte CUDA host buffer. Step 29 direct generation later passed with response `OK`; verification remains independent of Ollama.
 - Initial Step 28 tests incorrectly declared a synthetic `Text` language, causing deterministic preflight to require reapproval; corrected the fixture context.
 - Windows universal-newline conversion initially changed snapshot/content hashes in tests; switched exact safety hashes and snapshot restoration to UTF-8 bytes.
@@ -664,6 +684,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Planning Workflow Step 20 now preserves Validator `BLOCKED` as a hard final block.
 - Step 21 fixed a semantics issue where `READY` validation briefly set `execution_ready: true`; workflow responses now keep `execution_ready: false` until explicit approval can be consumed by a future execution layer.
 - Step 22 fixed approval/history state loss across backend restarts by moving workflow records from process memory into SQLite.
+- Step 30 exposed missing frontend typing for persisted diff-review metadata; added `review_id`, `review_fingerprint`, and `reviewed_at` to the frontend `CoderDiffPreviewResponse`.
+- Step 30 keeps apply/verify/rollback as explicit user actions in the frontend and clears execution state when upstream preflight, handoff, dry-run, or diff state changes.
 
 ## Git Commits From Recent Work
 
@@ -676,6 +698,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - bd62595 - feat: add controlled file mutation and rollback
 - 9df36ed - docs: update step 28 working details
 - 57ddcb7 - feat: add allowlisted execution verification
+- 03fdb78 - docs: finalize step 29 checkpoint
+- Step 30 - feat: add frontend execution controls
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -700,12 +724,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/execution_verification.py`
-- `backend/app/api/v1/router.py`
-- `backend/app/models/execution_verification.py`
-- `backend/app/services/execution_store.py`
-- `backend/app/services/execution_verification.py`
-- `backend/tests/test_execution_verification_api.py`
+- `frontend/components/execution-review-panel.tsx`
+- `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -718,14 +738,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 30 - Frontend Controlled Apply, Verify, and Rollback Controls with explicit confirmations.
+Recommended next task: Sprint 1 Step 31 - Persisted Execution History UI and Reloadable Audit Details.
 
 ## Next Files Likely to Change
 
-- frontend execution API client types for apply, verification history, and rollback
-- explicit reviewed-diff mutation confirmation UI
-- verification result and bounded-output display
-- explicit rollback control and execution status refresh
+- frontend execution history/list APIs if needed
+- workflow-linked execution audit display
+- reload previous execution, verification, and rollback records after browser refresh
+- preserve current explicit apply/verify/rollback gating
 
 ## Do Not Forget
 

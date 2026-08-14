@@ -4,21 +4,45 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  applyReviewedChanges,
   createExecutionHandoff,
   getPlanningWorkflowHistory,
+  listExecutionVerifications,
   listPlanningWorkflowHistory,
+  rollbackExecution,
   runCoderDiffPreview,
   runCoderDryRun,
   runExecutionPreflight,
+  runExecutionVerification,
   type CoderDiffPreviewResponse,
   type CoderDryRunResponse,
+  type ExecutionApplyResponse,
   type ExecutionHandoffResponse,
   type ExecutionPreflightResponse,
+  type ExecutionRollbackResponse,
+  type ExecutionVerificationResult,
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
 } from "../lib/api-client";
 
-type LoadingAction = "history" | "workflow" | "preflight" | "handoff" | "dry-run" | "diff" | null;
+type LoadingAction =
+  | "history"
+  | "workflow"
+  | "preflight"
+  | "handoff"
+  | "dry-run"
+  | "diff"
+  | "apply"
+  | "verify"
+  | "rollback"
+  | null;
+
+const SERVER_ALLOWED_VERIFICATIONS = [
+  "python_compile",
+  "pytest",
+  "frontend_lint",
+  "frontend_build",
+];
 
 export default function ExecutionReviewPanel() {
   const [workflows, setWorkflows] = useState<PlanningWorkflowHistoryItem[]>([]);
@@ -28,6 +52,10 @@ export default function ExecutionReviewPanel() {
   const [handoff, setHandoff] = useState<ExecutionHandoffResponse | null>(null);
   const [dryRun, setDryRun] = useState<CoderDryRunResponse | null>(null);
   const [diffPreview, setDiffPreview] = useState<CoderDiffPreviewResponse | null>(null);
+  const [execution, setExecution] = useState<ExecutionApplyResponse | null>(null);
+  const [rollback, setRollback] = useState<ExecutionRollbackResponse | null>(null);
+  const [verificationTypes, setVerificationTypes] = useState<string[]>(["python_compile"]);
+  const [verifications, setVerifications] = useState<ExecutionVerificationResult[]>([]);
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
@@ -41,6 +69,28 @@ export default function ExecutionReviewPanel() {
     preflight?.status === "READY_FOR_EXECUTION" && loadingAction === null;
   const canRunDryRun = Boolean(handoff) && loadingAction === null;
   const canRunDiff = Boolean(dryRun) && loadingAction === null;
+  const hasCurrentDiffReview = Boolean(
+    diffPreview?.review_id && diffPreview.review_fingerprint && diffPreview.reviewed_at,
+  );
+  const canApply =
+    selectedWorkflow?.approval_status === "APPROVED" &&
+    preflight?.status === "READY_FOR_EXECUTION" &&
+    Boolean(handoff?.execution_allowed) &&
+    Boolean(dryRun) &&
+    hasCurrentDiffReview &&
+    !execution &&
+    loadingAction === null;
+  const executionRolledBack = rollback?.status === "ROLLED_BACK" || execution?.status === "ROLLED_BACK";
+  const canVerify =
+    execution?.status === "EXECUTED" &&
+    !executionRolledBack &&
+    verificationTypes.length > 0 &&
+    loadingAction === null;
+  const canRollback =
+    execution?.status === "EXECUTED" &&
+    execution.rollback_available &&
+    !executionRolledBack &&
+    loadingAction === null;
   const progress = useMemo(
     () => [
       { label: "Planning", active: Boolean(selectedWorkflow), state: selectedWorkflow ? "ready" : "waiting" },
@@ -49,8 +99,15 @@ export default function ExecutionReviewPanel() {
       { label: "Handoff", active: Boolean(handoff), state: handoff ? "ready" : "waiting" },
       { label: "Dry Run", active: Boolean(dryRun), state: dryRun ? "ready" : "waiting" },
       { label: "Diff", active: Boolean(diffPreview), state: diffPreview ? "ready" : "waiting" },
+      { label: "Apply", active: execution?.status === "EXECUTED", state: execution?.status ?? "waiting" },
+      {
+        label: "Verify",
+        active: verifications.some((verification) => verification.status === "PASSED"),
+        state: latestVerificationState(verifications),
+      },
+      { label: "Rollback", active: executionRolledBack, state: rollback?.status ?? "conditional" },
     ],
-    [diffPreview, dryRun, handoff, preflight, selectedWorkflow],
+    [diffPreview, dryRun, execution, executionRolledBack, handoff, preflight, rollback, selectedWorkflow, verifications],
   );
 
   async function loadHistory() {
@@ -103,6 +160,13 @@ export default function ExecutionReviewPanel() {
     setHandoff(null);
     setDryRun(null);
     setDiffPreview(null);
+    resetMutationState();
+  }
+
+  function resetMutationState() {
+    setExecution(null);
+    setRollback(null);
+    setVerifications([]);
   }
 
   function resetAfterPreflight(result: ExecutionPreflightResponse) {
@@ -110,17 +174,117 @@ export default function ExecutionReviewPanel() {
     setHandoff(null);
     setDryRun(null);
     setDiffPreview(null);
+    resetMutationState();
   }
 
   function resetAfterHandoff(result: ExecutionHandoffResponse) {
     setHandoff(result);
     setDryRun(null);
     setDiffPreview(null);
+    resetMutationState();
   }
 
   function resetAfterDryRun(result: CoderDryRunResponse) {
     setDryRun(result);
     setDiffPreview(null);
+    resetMutationState();
+  }
+
+  function resetAfterDiff(result: CoderDiffPreviewResponse) {
+    setDiffPreview(result);
+    resetMutationState();
+  }
+
+  async function applyDiffPreview() {
+    if (!handoff || !dryRun || !diffPreview) {
+      return;
+    }
+
+    const files = diffPreview.file_previews
+      .map((filePreview) => `${filePreview.operation_type}: ${filePreview.relative_path}`)
+      .join("\n");
+    const confirmed = window.confirm(
+      `Applying will modify project files after creating required snapshots.\n\n${files}\n\nContinue?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await runStep(
+      "apply",
+      () => applyReviewedChanges(handoff, dryRun, diffPreview),
+      (result) => {
+        setExecution(result);
+        setRollback(null);
+        setVerifications([]);
+      },
+    );
+  }
+
+  async function runSelectedVerification() {
+    if (!execution) {
+      return;
+    }
+
+    await runStep(
+      "verify",
+      () => runExecutionVerification(execution.execution_id, verificationTypes),
+      (result) => setVerifications(result.results),
+    );
+  }
+
+  async function refreshVerificationHistory(executionId: string) {
+    await runStep(
+      "verify",
+      () => listExecutionVerifications(executionId),
+      (result) => setVerifications(result.verifications),
+    );
+  }
+
+  async function rollbackCurrentExecution() {
+    if (!execution) {
+      return;
+    }
+
+    const files = execution.file_results
+      .map((fileResult) => `${fileResult.operation_type}: ${fileResult.relative_path}`)
+      .join("\n");
+    const confirmed = window.confirm(
+      `Rollback will restore or remove files changed by execution ${execution.execution_id}.\n\n${files}\n\nContinue?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await runStep(
+      "rollback",
+      () => rollbackExecution(execution.execution_id),
+      (result) => {
+        setRollback(result);
+        if (result.status === "ROLLED_BACK") {
+          setExecution((current) =>
+            current
+              ? {
+                  ...current,
+                  status: "ROLLED_BACK",
+                  rollback_available: false,
+                  message: result.message,
+                }
+              : current,
+          );
+        }
+      },
+    );
+  }
+
+  function toggleVerificationType(verificationType: string) {
+    setVerificationTypes((current) =>
+      current.includes(verificationType)
+        ? current.filter((item) => item !== verificationType)
+        : [...current, verificationType],
+    );
   }
 
   return (
@@ -244,7 +408,7 @@ export default function ExecutionReviewPanel() {
               label={loadingAction === "diff" ? "Previewing..." : "Preview diff"}
               onClick={() =>
                 dryRun
-                  ? void runStep("diff", () => runCoderDiffPreview(dryRun), setDiffPreview)
+                  ? void runStep("diff", () => runCoderDiffPreview(dryRun), resetAfterDiff)
                   : undefined
               }
             />
@@ -254,6 +418,35 @@ export default function ExecutionReviewPanel() {
           {handoff ? <HandoffCard handoff={handoff} /> : null}
           {dryRun ? <DryRunCard dryRun={dryRun} /> : null}
           {diffPreview ? <DiffPreviewCard diffPreview={diffPreview} /> : null}
+          {diffPreview ? (
+            <ApplyReviewCard
+              canApply={canApply}
+              diffPreview={diffPreview}
+              isApplying={loadingAction === "apply"}
+              onApply={() => void applyDiffPreview()}
+            />
+          ) : null}
+          {execution ? <ExecutionResultCard execution={execution} /> : null}
+          {execution ? (
+            <VerificationCard
+              canVerify={canVerify}
+              isLoading={loadingAction === "verify"}
+              onRefresh={() => void refreshVerificationHistory(execution.execution_id)}
+              onRun={() => void runSelectedVerification()}
+              onToggle={toggleVerificationType}
+              selectedTypes={verificationTypes}
+              verifications={verifications}
+            />
+          ) : null}
+          {execution ? (
+            <RollbackCard
+              canRollback={canRollback}
+              execution={execution}
+              isRollingBack={loadingAction === "rollback"}
+              onRollback={() => void rollbackCurrentExecution()}
+              rollback={rollback}
+            />
+          ) : null}
         </div>
       </div>
     </section>
@@ -351,6 +544,13 @@ function DiffPreviewCard({ diffPreview }: { diffPreview: CoderDiffPreviewRespons
   return (
     <ResultCard title="Diff Preview" status="PREVIEW ONLY">
       <p>{diffPreview.message}</p>
+      <p>
+        Review ID: {diffPreview.review_id ?? "Not persisted"} | Reviewed:{" "}
+        {diffPreview.reviewed_at ? formatDate(diffPreview.reviewed_at) : "Not available"}
+      </p>
+      <p className="break-all">
+        Review fingerprint: {diffPreview.review_fingerprint ?? "Not available"}
+      </p>
       <ListBlock label="Warnings" values={diffPreview.warnings} />
       <ListBlock label="Blockers" values={diffPreview.blockers} />
       <div className="mt-4 space-y-4">
@@ -376,6 +576,243 @@ function DiffPreviewCard({ diffPreview }: { diffPreview: CoderDiffPreviewRespons
           </div>
         ))}
       </div>
+    </ResultCard>
+  );
+}
+
+function ApplyReviewCard({
+  canApply,
+  diffPreview,
+  isApplying,
+  onApply,
+}: {
+  canApply: boolean;
+  diffPreview: CoderDiffPreviewResponse;
+  isApplying: boolean;
+  onApply: () => void;
+}) {
+  return (
+    <ResultCard title="Apply Reviewed Changes" status={canApply ? "READY" : "BLOCKED"}>
+      <p className="font-medium text-amber-900">Applying will modify project files.</p>
+      <p>
+        DevLoopAI will use the exact reviewed target content shown above and create
+        required snapshots before writing.
+      </p>
+      <ListBlock
+        label="Files that will change"
+        values={diffPreview.file_previews.map(
+          (filePreview) => `${filePreview.operation_type} ${filePreview.relative_path}`,
+        )}
+      />
+      <button
+        className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-amber-600 px-4 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+        disabled={!canApply}
+        type="button"
+        onClick={onApply}
+      >
+        {isApplying ? "Applying..." : "Apply reviewed changes"}
+      </button>
+    </ResultCard>
+  );
+}
+
+function ExecutionResultCard({ execution }: { execution: ExecutionApplyResponse }) {
+  return (
+    <ResultCard title="Execution Result" status={execution.status}>
+      <p>{execution.message}</p>
+      <p className="break-all">Execution ID: {execution.execution_id}</p>
+      <p>Executed: {formatDate(execution.execution_timestamp)}</p>
+      <p>Backup status: {execution.backup_status}</p>
+      <p>{execution.rollback_available ? "Backup available" : "Rollback unavailable"}</p>
+      <ListBlock label="Files attempted" values={execution.files_attempted} />
+      <ListBlock label="Files changed" values={execution.files_changed} />
+      <ListBlock label="Warnings" values={execution.warnings} />
+      <ListBlock label="Blockers" values={execution.blockers} />
+      <div className="mt-4 space-y-3">
+        {execution.file_results.map((fileResult) => (
+          <div
+            key={`${fileResult.operation_type}:${fileResult.relative_path}`}
+            className="rounded-md border border-zinc-200 bg-white p-3"
+          >
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <p className="break-all text-sm font-medium text-zinc-950">
+                {fileResult.relative_path}
+              </p>
+              <StatusBadge value={fileResult.status} />
+            </div>
+            <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-600 md:grid-cols-2">
+              <HashRow label="Original hash" value={fileResult.original_content_hash} />
+              <HashRow label="Proposed hash" value={fileResult.proposed_content_hash} />
+              <HashRow label="Final hash" value={fileResult.final_content_hash} />
+              <HashRow label="Backup status" value={fileResult.backup_status} />
+              <HashRow label="Backup location" value={fileResult.backup_location} />
+              <HashRow label="Operation" value={fileResult.operation_type} />
+            </dl>
+          </div>
+        ))}
+      </div>
+    </ResultCard>
+  );
+}
+
+function VerificationCard({
+  canVerify,
+  isLoading,
+  onRefresh,
+  onRun,
+  onToggle,
+  selectedTypes,
+  verifications,
+}: {
+  canVerify: boolean;
+  isLoading: boolean;
+  onRefresh: () => void;
+  onRun: () => void;
+  onToggle: (verificationType: string) => void;
+  selectedTypes: string[];
+  verifications: ExecutionVerificationResult[];
+}) {
+  const hasRollbackRecommendation = verifications.some(
+    (verification) => verification.rollback_recommended,
+  );
+
+  return (
+    <ResultCard title="Verification" status={latestVerificationState(verifications)}>
+      <p>Run only server-allowlisted checks. No arbitrary command input is accepted.</p>
+      {hasRollbackRecommendation ? (
+        <p className="font-medium text-amber-900">
+          Verification failed - rollback recommended.
+        </p>
+      ) : null}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {SERVER_ALLOWED_VERIFICATIONS.map((verificationType) => (
+          <label
+            key={verificationType}
+            className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
+          >
+            <input
+              checked={selectedTypes.includes(verificationType)}
+              className="h-4 w-4"
+              type="checkbox"
+              onChange={() => onToggle(verificationType)}
+            />
+            <span>{verificationType}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          disabled={!canVerify}
+          type="button"
+          onClick={onRun}
+        >
+          {isLoading ? "Running..." : "Run verification"}
+        </button>
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={isLoading}
+          type="button"
+          onClick={onRefresh}
+        >
+          Refresh history
+        </button>
+      </div>
+      <div className="mt-4 space-y-4">
+        {verifications.length > 0 ? (
+          verifications.map((verification) => (
+            <VerificationResult key={verification.verification_id} verification={verification} />
+          ))
+        ) : (
+          <p className="text-zinc-500">No verification runs recorded yet.</p>
+        )}
+      </div>
+    </ResultCard>
+  );
+}
+
+function VerificationResult({
+  verification,
+}: {
+  verification: ExecutionVerificationResult;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white p-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="break-all text-sm font-medium text-zinc-950">
+          {verification.verification_type}
+        </p>
+        <StatusBadge value={verification.status} />
+      </div>
+      <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-600 md:grid-cols-2">
+        <HashRow label="Exit code" value={verification.exit_code?.toString() ?? "None"} />
+        <HashRow label="Duration" value={`${verification.duration_seconds.toFixed(2)}s`} />
+        <HashRow label="Command identity" value={verification.command_identity} />
+        <HashRow label="Working directory" value={verification.working_directory} />
+        <HashRow
+          label="Rollback recommendation"
+          value={verification.rollback_recommended ? "Recommended" : "Not recommended"}
+        />
+        <HashRow label="Output truncated" value={verification.output_truncated ? "Yes" : "No"} />
+      </dl>
+      <ListBlock label="Changed files" values={verification.changed_files} />
+      <ListBlock label="Warnings" values={verification.warnings} />
+      <ListBlock label="Blockers" values={verification.blockers} />
+      <OutputBlock label="Stdout excerpt" value={verification.stdout_excerpt} />
+      <OutputBlock label="Stderr excerpt" value={verification.stderr_excerpt} />
+    </div>
+  );
+}
+
+function RollbackCard({
+  canRollback,
+  execution,
+  isRollingBack,
+  onRollback,
+  rollback,
+}: {
+  canRollback: boolean;
+  execution: ExecutionApplyResponse;
+  isRollingBack: boolean;
+  onRollback: () => void;
+  rollback: ExecutionRollbackResponse | null;
+}) {
+  return (
+    <ResultCard title="Rollback" status={rollback?.status ?? (canRollback ? "AVAILABLE" : "UNAVAILABLE")}>
+      {rollback?.status === "ROLLED_BACK" ? (
+        <p className="font-medium text-emerald-900">Execution rolled back.</p>
+      ) : (
+        <p>
+          Rollback restores modified files from snapshots and removes files created
+          by this execution.
+        </p>
+      )}
+      <ListBlock
+        label="Files rollback would restore/remove"
+        values={execution.file_results.map(
+          (fileResult) => `${fileResult.operation_type} ${fileResult.relative_path}`,
+        )}
+      />
+      {rollback ? (
+        <>
+          <p>{rollback.message}</p>
+          <p>
+            Rolled back: {rollback.rolled_back_at ? formatDate(rollback.rolled_back_at) : "Not completed"}
+          </p>
+          <ListBlock label="Files restored" values={rollback.files_restored} />
+          <ListBlock label="Files removed" values={rollback.files_removed} />
+          <ListBlock label="Warnings" values={rollback.warnings} />
+          <ListBlock label="Blockers" values={rollback.blockers} />
+        </>
+      ) : null}
+      <button
+        className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-red-700 px-4 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+        disabled={!canRollback}
+        type="button"
+        onClick={onRollback}
+      >
+        {isRollingBack ? "Rolling back..." : "Rollback execution"}
+      </button>
     </ResultCard>
   );
 }
@@ -406,6 +843,26 @@ function ContentPreview({ label, value }: { label: string; value: string | null 
   );
 }
 
+function OutputBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mt-3 text-xs font-medium uppercase text-zinc-500">{label}</p>
+      <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-5 text-zinc-800">
+        {value || "None"}
+      </pre>
+    </div>
+  );
+}
+
+function HashRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt className="font-medium uppercase text-zinc-500">{label}</dt>
+      <dd className="mt-1 break-all text-zinc-800">{value ?? "None"}</dd>
+    </div>
+  );
+}
+
 function ResultCard({
   title,
   status,
@@ -432,7 +889,7 @@ function ProgressRail({
   items: { label: string; active: boolean; state: string }[];
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs sm:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs sm:grid-cols-3 xl:grid-cols-9">
       {items.map((item) => (
         <div
           key={item.label}
@@ -515,6 +972,14 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleString();
+}
+
+function latestVerificationState(verifications: ExecutionVerificationResult[]) {
+  if (verifications.length === 0) {
+    return "waiting";
+  }
+
+  return verifications[verifications.length - 1]?.status ?? "waiting";
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

@@ -334,6 +334,94 @@ export interface CoderDiffPreviewResponse {
   execution_performed: boolean;
   mutation_capabilities_enabled: boolean;
   message: string;
+  review_id: string | null;
+  review_fingerprint: string | null;
+  reviewed_at: string | null;
+}
+
+export type ExecutionStatus =
+  | "EXECUTED"
+  | "BLOCKED"
+  | "REVIEW_STALE"
+  | "ROLLED_BACK"
+  | "PARTIALLY_FAILED_AND_ROLLED_BACK";
+
+export interface ExecutionFileResult {
+  relative_path: string;
+  operation_type: "modify_text_file" | "create_text_file";
+  status: "CHANGED" | "CREATED" | "ROLLED_BACK" | "NOT_ATTEMPTED" | "FAILED";
+  original_content_hash: string | null;
+  proposed_content_hash: string;
+  final_content_hash: string | null;
+  backup_location: string | null;
+  backup_status: "CREATED" | "NOT_REQUIRED" | "FAILED";
+}
+
+export interface ExecutionApplyResponse {
+  execution_id: string;
+  workflow_id: string;
+  workspace_path: string;
+  status: ExecutionStatus;
+  files_attempted: string[];
+  files_changed: string[];
+  file_results: ExecutionFileResult[];
+  backup_status: string;
+  rollback_available: boolean;
+  warnings: string[];
+  blockers: string[];
+  execution_timestamp: string;
+  message: string;
+}
+
+export interface ExecutionRollbackResponse {
+  execution_id: string;
+  workflow_id: string;
+  status: "ROLLED_BACK" | "BLOCKED";
+  files_restored: string[];
+  files_removed: string[];
+  warnings: string[];
+  blockers: string[];
+  rolled_back_at: string | null;
+  message: string;
+}
+
+export type VerificationStatus =
+  | "PASSED"
+  | "FAILED"
+  | "SKIPPED"
+  | "TIMED_OUT"
+  | "BLOCKED";
+
+export interface ExecutionVerificationResult {
+  verification_id: string;
+  execution_id: string;
+  workflow_id: string;
+  verification_type: string;
+  command_identity: string;
+  working_directory: string;
+  status: VerificationStatus;
+  exit_code: number | null;
+  duration_seconds: number;
+  stdout_excerpt: string;
+  stderr_excerpt: string;
+  output_truncated: boolean;
+  timestamp: string;
+  rollback_recommended: boolean;
+  changed_files: string[];
+  warnings: string[];
+  blockers: string[];
+}
+
+export interface ExecutionVerificationResponse {
+  execution_id: string;
+  workflow_id: string;
+  results: ExecutionVerificationResult[];
+}
+
+export interface ExecutionVerificationHistoryResponse {
+  execution_id: string;
+  workflow_id: string;
+  verifications: ExecutionVerificationResult[];
 }
 
 type ChatStreamEvent =
@@ -694,6 +782,64 @@ export async function runCoderDiffPreview(
       dry_run: dryRun,
     }),
   });
+}
+
+export async function applyReviewedChanges(
+  handoff: ExecutionHandoffResponse,
+  dryRun: CoderDryRunResponse,
+  diffPreview: CoderDiffPreviewResponse,
+): Promise<ExecutionApplyResponse> {
+  return requestJson<ExecutionApplyResponse>("/workflows/execution/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      handoff,
+      dry_run: dryRun,
+      diff_preview: diffPreview,
+    }),
+  });
+}
+
+export async function rollbackExecution(
+  executionId: string,
+): Promise<ExecutionRollbackResponse> {
+  return requestJson<ExecutionRollbackResponse>("/workflows/execution/rollback", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      execution_id: executionId,
+    }),
+  });
+}
+
+export async function runExecutionVerification(
+  executionId: string,
+  verificationTypes: string[],
+): Promise<ExecutionVerificationResponse> {
+  return requestJson<ExecutionVerificationResponse>(
+    `/workflows/execution/${encodeURIComponent(executionId)}/verify`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        verification_types: verificationTypes,
+      }),
+    },
+  );
+}
+
+export async function listExecutionVerifications(
+  executionId: string,
+): Promise<ExecutionVerificationHistoryResponse> {
+  return requestJson<ExecutionVerificationHistoryResponse>(
+    `/workflows/execution/${encodeURIComponent(executionId)}/verifications`,
+  );
 }
 
 export async function validateReviewedPlan(
