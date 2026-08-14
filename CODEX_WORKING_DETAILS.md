@@ -2,34 +2,34 @@
 
 ## Last Updated
 
-Date: 2026-08-14
-Time: 22:24:00 +05:00
+Date: 2026-08-15
+Time: 01:10:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: 646a0d6 - feat: persist planning workflow history
-Working Tree: clean after Step 22 checkpoint
-Last Push: 646a0d6 pushed to origin/main
+Latest Commit: e8d7b5c - docs: update step 22 working details
+Working Tree: live Ollama verification notes pending
+Last Push: e8d7b5c pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Persistent Planning Workflow History
+Sprint: Sprint 1 - Persistent Planning Workflow History Verification
 
 ## Current Step
 
-Step: Sprint 1 - Step 22: Persistent Planning Workflow History & Audit Trail
+Step: Sprint 1 - Step 22: Real Ollama Re-Verification
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Added SQLite-backed planning workflow history and approval audit persistence.
+Re-ran real DevLoopAI Planner -> Reviewer -> Validator -> Planning Workflow checks against fixed Ollama 0.32.12.
 
 ## Current Goal
 
-Step 22 persistence checkpoint committed and pushed to GitHub.
+Update live Ollama verification status and push the documentation checkpoint.
 
 ## What Has Been Completed
 
@@ -151,6 +151,15 @@ Step 22 persistence checkpoint committed and pushed to GitHub.
 - History list/get responses intentionally do not expose approval tokens.
 - Added `.gitignore` rules for `backend/data/` and local SQLite database files.
 - Added frontend API client types/functions for persisted planning workflow history.
+- User fixed Ollama; live server now reports version `0.32.12`.
+- Verified `qwen2.5-coder:7b` is reachable through Ollama from `D:\OllamaModels`.
+- Re-ran direct Ollama generation successfully.
+- Re-ran real DevLoopAI `POST /api/v1/agents/planner` successfully against Ollama.
+- Re-ran real DevLoopAI `POST /api/v1/agents/reviewer` successfully against Ollama.
+- Re-ran real DevLoopAI `POST /api/v1/agents/validator` successfully against Ollama.
+- Re-ran real DevLoopAI `POST /api/v1/workflows/planning` successfully against Ollama.
+- Verified real workflow approval with `POST /api/v1/workflows/planning/approve`.
+- Verified persisted history retrieval with `GET /api/v1/workflows/planning/{workflow_id}` after real workflow approval.
 
 ## Current Architecture
 
@@ -269,6 +278,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Ollama / AI Status
 
 - Ollama local server status: reachable at `http://localhost:11434`.
+- Ollama version: `0.32.12`.
 - `GET http://localhost:11434/api/tags`: returns `200` and includes `qwen2.5-coder:7b`.
 - Configured model: `qwen2.5-coder:7b`.
 - Model storage: `D:\OllamaModels`.
@@ -403,11 +413,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live backend `POST /api/v1/chat/stream`: PASS with streamed chunks `Streaming` and ` ready`, then `done`.
 - Live backend `POST /api/v1/agents/planner`: PASS with real Ollama response using DevLoopAI workspace context.
 - Live backend `POST /api/v1/agents/reviewer`: PASS with real Ollama response reviewing real planner output.
-- Live backend `POST /api/v1/workflows/planning`: SKIPPED/FAILED for Step 22 because local Ollama returned `invalid argument: --load-mode` while loading `qwen2.5-coder:7b`; this is an Ollama runtime/model-loader issue outside the DevLoopAI code path.
-- Live backend `POST /api/v1/workflows/planning/approve`: PASS against an exact persisted seeded approval ID/token/fingerprint; returned `APPROVED` and `Plan approved. No code was executed.`
-- Live backend approval-gate state before approval: PASS on seeded persisted record with `PENDING_APPROVAL` and `approval_allowed: true`.
+- Live Ollama `GET /api/version`: PASS with `0.32.12`.
+- Direct Ollama `POST /api/generate`: PASS with exact response `DevLoopAI Ollama OK`.
+- Live backend `POST /api/v1/agents/planner`: PASS with `qwen2.5-coder:7b`, 6 implementation steps returned.
+- Live backend `POST /api/v1/agents/reviewer`: PASS with `qwen2.5-coder:7b`, recommendation `APPROVE_WITH_CHANGES`.
+- Live backend `POST /api/v1/agents/validator`: PASS with `qwen2.5-coder:7b`, status `READY_WITH_WARNINGS`, 0 blockers.
+- Live backend `POST /api/v1/workflows/planning`: PASS with real Planner -> Reviewer -> Validator responses, final `READY_WITH_WARNINGS`, approval `PENDING_APPROVAL`, approval allowed `true`.
+- Live backend `POST /api/v1/workflows/planning/approve`: PASS against the exact real workflow approval ID/token/fingerprint; returned `APPROVED`.
+- Live backend approval-gate state before approval: PASS on real workflow with `PENDING_APPROVAL` and `approval_allowed: true`.
 - Live backend `GET /api/v1/workflows/planning`: PASS with persisted SQLite history list.
-- Live backend `GET /api/v1/workflows/planning/{workflow_id}`: PASS with persisted full audit record.
+- Live backend `GET /api/v1/workflows/planning/{workflow_id}`: PASS with persisted full audit record after real workflow approval; fingerprint matched.
 - Live SQLite reinitialization check: PASS; a fresh `PlanningApprovalStore` could read the approved record from `backend/data/devloopai.sqlite3`.
 - Live backend `POST /api/v1/agents/validator`: PASS with real Ollama validation after real planner/reviewer outputs.
 - Headless browser frontend -> FastAPI -> Ollama chat flow: PASS.
@@ -433,7 +448,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - None currently blocking.
 - Step 22 persistence checkpoint is verified, committed, and pushed.
-- Local Ollama 0.32.9 failed to load `qwen2.5-coder:7b` with `llama-server ... invalid argument: --load-mode`; backend handled this as a clear `502`. Tests and deterministic live persistence/API verification passed.
+- Prior local Ollama loader issue is resolved after update to `0.32.12`; real DevLoopAI Planner -> Reviewer -> Validator -> Workflow verification now passes.
+- One individual Validator retry returned malformed model JSON and DevLoopAI safely surfaced a `502`; a subsequent real Validator run passed with `READY_WITH_WARNINGS`.
 - Browser approval CDP retry timed out again; API approval/history flow passed and frontend build/lint passed.
 - Browser approval automation with real Ollama workflow timed out after the backend completed the workflow; API approval flow passed, frontend build/lint passed, and the temporary browser script was removed.
 - Initial pytest command used system Python from the repo root and failed because pytest/app imports were unavailable there; reran successfully with `backend\.venv\Scripts\python.exe` from `backend`.
