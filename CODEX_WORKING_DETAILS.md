@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 04:10:00 +05:00
+Time: 05:15:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 28 working-details finalization
-Working Tree: clean after Step 28 feature commit
+Latest Commit: Step 29 verification runner checkpoint pending
+Working Tree: Step 29 verified changes ready to commit
 Last Push: Step 28 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Controlled File Mutation
+Sprint: Sprint 1 - Post-Mutation Verification
 
 ## Current Step
 
-Step: Sprint 1 - Step 28: Controlled File Mutation with Snapshot Backup and Rollback
+Step: Sprint 1 - Step 29: Strictly Allowlisted Post-Mutation Verification Runner
 
-Status: COMPLETED
+Status: VERIFIED - COMMIT/PUSH PENDING
 
 ## Currently Working On
 
-Step 28 controlled mutation, snapshot, audit, and rollback checkpoint completed.
+Finalizing the verified allowlisted verification runner and audit checkpoint.
 
 ## Current Goal
 
-Keep the verified Step 28 checkpoint synchronized with GitHub.
+Commit and push the Step 29 verification runner checkpoint.
 
 ## What Has Been Completed
 
@@ -210,6 +210,20 @@ Keep the verified Step 28 checkpoint synchronized with GitHub.
 - Kept deletion, commands, tests, dependency installation, Git operations, and Ollama generation disabled in the mutation layer.
 - Added 17 controlled-mutation tests covering modify/create, blocking, tampering, stale review, backup/write failures, automatic rollback, explicit rollback, repeated rollback, invalid execution ID, and persistence restart.
 - Verified a disposable live `sample.txt` mutation through approved workflow, preflight, handoff, persisted deterministic review, live apply API, SQLite audit reload, live rollback API, and exact original-content restoration.
+- Added `POST /api/v1/workflows/execution/{execution_id}/verify` for server-allowlisted verification identifiers only.
+- Added `GET /api/v1/workflows/execution/{execution_id}/verifications` for persisted verification history.
+- Added fixed verification registry entries for `python_compile`, `pytest`, `frontend_lint`, and `frontend_build`.
+- Python compile uses a fixed isolated syntax-check subprocess that writes no bytecode.
+- Pytest uses the fixed DevLoopAI Python runtime and only runs when visible Python tests are detected.
+- Frontend lint/build bypass package-script text and invoke fixed local ESLint/Next CLI entry points through the resolved Node executable.
+- Added pre-run checks for `EXECUTED` status, approved workflow/fingerprint, approved workspace linkage, persisted per-file audit equality, current changed-file hashes, and non-rolled-back state.
+- Added direct argument-list subprocess execution with `shell=False`, no stdin, fixed working directories inside the workspace, sanitized environment, process-group timeout termination, and 32 KiB stdout/stderr limits per stream.
+- Added output redaction for common credential patterns before responses or SQLite persistence.
+- Added SQLite verification audit records linked to execution, workflow, changed files, command identity, status, duration, bounded output, and rollback recommendation.
+- Verification failures and timeouts recommend rollback but never trigger it automatically.
+- Added 21 focused tests for pass/fail/skip/timeout/blocking, injection attempts, stale workflow/workspace/file audit, missing tools/scripts, fixed frontend CLIs, output truncation/redaction, persistence restart, history, and multiple runs.
+- Verified live disposable valid Python mutation -> `python_compile` `PASSED`.
+- Verified live disposable syntax-error mutation -> `python_compile` `FAILED`, exit code `1`, rollback recommended, explicit rollback restored valid content, and final rollback restored original content.
 
 ## Current Architecture
 
@@ -577,6 +591,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live disposable execution persistence reload: PASS with `EXECUTED` after a fresh `ExecutionStore` initialization.
 - Live disposable rollback API: PASS with `ROLLED_BACK` and exact original content restored.
 - Live real Ollama Planner retry: FAILED/BLOCKED by model startup memory allocation failure; no workflow was created and mutation safety was not weakened.
+- Step 29 focused verification tests: PASS, `21 passed`.
+- Step 29 full backend pytest: PASS, `163 passed`.
+- Step 29 Python application compile check: PASS.
+- Step 29 frontend ESLint: PASS.
+- Step 29 frontend production build: PASS.
+- Live disposable valid mutation verification: PASS with `python_compile` status `PASSED` and persisted history count `1`.
+- Live disposable syntax-error verification: PASS with expected verification status `FAILED`, exit code `1`, and `rollback_recommended: true`.
+- Live disposable explicit rollback after failed verification: PASS; prior valid Python content restored.
+- Live disposable cleanup rollback: PASS; original `value = 1` content restored.
+- Direct Ollama generation retry after Step 29 verification: PASS with response `OK`; prior model startup memory failure was not present on this retry.
 
 ## Known Problems
 
@@ -590,8 +614,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 27 frontend execution review panel checkpoint is verified, committed, and pushed.
 - Step 27 browser automation with headless Chrome was attempted, but shell policy blocked the Chrome launch commands. Static Next.js route render and live API verification were completed instead.
 - Step 27 live dry-run/diff UI progression could not be completed because Ollama returned CUDA out-of-memory for direct generation and backend dry-run generation. This is a local model runtime/resource issue, not a confirmed frontend source defect.
-- Step 28 controlled mutation checkpoint is verified and ready to commit/push.
-- Step 28 live Ollama planning generation remained unavailable: model startup failed while allocating an 885,035,008-byte CUDA host buffer. The mutation live test used deterministic persisted review artifacts and required no Ollama call, as designed.
+- Step 28 controlled mutation checkpoint is verified, committed, and pushed.
+- Step 29 allowlisted verification runner is verified and ready to commit/push.
+- Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
+- Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
+- During Step 28, Ollama planning generation failed while allocating an 885,035,008-byte CUDA host buffer. Step 29 direct generation later passed with response `OK`; verification remains independent of Ollama.
 - Initial Step 28 tests incorrectly declared a synthetic `Text` language, causing deterministic preflight to require reapproval; corrected the fixture context.
 - Windows universal-newline conversion initially changed snapshot/content hashes in tests; switched exact safety hashes and snapshot restoration to UTF-8 bytes.
 - Review found rollback must use the persisted execution workspace instead of rerunning preflight after the intentional mutation; corrected before rollback verification.
@@ -672,15 +699,12 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/agents/coder.py`
-- `backend/app/api/v1/endpoints/coder.py`
-- `backend/app/api/v1/endpoints/execution_mutation.py`
+- `backend/app/api/v1/endpoints/execution_verification.py`
 - `backend/app/api/v1/router.py`
-- `backend/app/models/coder.py`
-- `backend/app/models/execution_mutation.py`
-- `backend/app/services/execution_mutation.py`
+- `backend/app/models/execution_verification.py`
 - `backend/app/services/execution_store.py`
-- `backend/tests/test_execution_mutation_api.py`
+- `backend/app/services/execution_verification.py`
+- `backend/tests/test_execution_verification_api.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -693,14 +717,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 29 - Controlled Post-Mutation Verification Runner with strict command allowlisting and rollback integration.
+Recommended next task: Sprint 1 Step 30 - Frontend Controlled Apply, Verify, and Rollback Controls with explicit confirmations.
 
 ## Next Files Likely to Change
 
-- backend verification command policy and schemas
-- backend controlled verification service/API
-- execution audit integration for verification results
-- tests for command allowlisting, timeouts, failures, and rollback policy
+- frontend execution API client types for apply, verification history, and rollback
+- explicit reviewed-diff mutation confirmation UI
+- verification result and bounded-output display
+- explicit rollback control and execution status refresh
 
 ## Do Not Forget
 

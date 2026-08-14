@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.models.coder import CoderDiffPreviewResponse
 from app.models.execution_mutation import ExecutionApplyResponse, ExecutionFileResult
+from app.models.execution_verification import ExecutionVerificationResult
 
 
 class ExecutionRecordNotFoundError(Exception):
@@ -174,6 +175,105 @@ class ExecutionStore:
 
         return ExecutionApplyResponse.model_validate(json.loads(row["response_json"]))
 
+    def get_execution_audit(self, execution_id: str) -> dict[str, str]:
+        """Return immutable execution linkage fields used by verification checks."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT execution_id, workflow_id, plan_fingerprint, diff_review_id,
+                       diff_fingerprint, workspace_path, status, created_at
+                FROM coding_executions
+                WHERE execution_id = ?
+                """,
+                (execution_id,),
+            ).fetchone()
+
+        if row is None:
+            raise ExecutionRecordNotFoundError("Execution ID is invalid.")
+        return dict(row)
+
+    def get_execution_files(self, execution_id: str) -> list[ExecutionFileResult]:
+        """Load persisted per-file audit rows in execution order."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT relative_path, operation_type, original_content_hash,
+                       proposed_content_hash, final_content_hash, backup_location,
+                       backup_status, mutation_status
+                FROM coding_execution_files
+                WHERE execution_id = ?
+                ORDER BY ordinal ASC
+                """,
+                (execution_id,),
+            ).fetchall()
+
+        return [
+            ExecutionFileResult(
+                relative_path=row["relative_path"],
+                operation_type=row["operation_type"],
+                status=row["mutation_status"],
+                original_content_hash=row["original_content_hash"],
+                proposed_content_hash=row["proposed_content_hash"],
+                final_content_hash=row["final_content_hash"],
+                backup_location=row["backup_location"],
+                backup_status=row["backup_status"],
+            )
+            for row in rows
+        ]
+
+    def record_verification(self, result: ExecutionVerificationResult) -> None:
+        """Persist one bounded verification result without environment data."""
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO execution_verifications (
+                    verification_id, execution_id, workflow_id, verification_type,
+                    command_identity, working_directory, status, exit_code,
+                    duration_seconds, stdout_excerpt, stderr_excerpt,
+                    output_truncated, timestamp, rollback_recommended,
+                    changed_files_json, warnings_json, blockers_json, result_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    result.verification_id,
+                    result.execution_id,
+                    result.workflow_id,
+                    result.verification_type,
+                    result.command_identity,
+                    result.working_directory,
+                    result.status,
+                    result.exit_code,
+                    result.duration_seconds,
+                    result.stdout_excerpt,
+                    result.stderr_excerpt,
+                    int(result.output_truncated),
+                    result.timestamp,
+                    int(result.rollback_recommended),
+                    self._dump(result.changed_files),
+                    self._dump(result.warnings),
+                    self._dump(result.blockers),
+                    self._dump(result.model_dump(mode="json")),
+                ),
+            )
+
+    def list_verifications(self, execution_id: str) -> list[ExecutionVerificationResult]:
+        """Return verification history in execution order."""
+        self.get_execution_audit(execution_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT result_json
+                FROM execution_verifications
+                WHERE execution_id = ?
+                ORDER BY rowid ASC
+                """,
+                (execution_id,),
+            ).fetchall()
+        return [
+            ExecutionVerificationResult.model_validate(json.loads(row["result_json"]))
+            for row in rows
+        ]
+
     def mark_rolled_back(self, response: ExecutionApplyResponse) -> str:
         rolled_back_at = self._now()
         with self._connect() as connection:
@@ -247,13 +347,43 @@ class ExecutionStore:
                 ON coding_executions (created_at DESC)
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS execution_verifications (
+                    verification_id TEXT PRIMARY KEY,
+                    execution_id TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL,
+                    verification_type TEXT NOT NULL,
+                    command_identity TEXT NOT NULL,
+                    working_directory TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    exit_code INTEGER,
+                    duration_seconds REAL NOT NULL,
+                    stdout_excerpt TEXT NOT NULL,
+                    stderr_excerpt TEXT NOT NULL,
+                    output_truncated INTEGER NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    rollback_recommended INTEGER NOT NULL,
+                    changed_files_json TEXT NOT NULL,
+                    warnings_json TEXT NOT NULL,
+                    blockers_json TEXT NOT NULL,
+                    result_json TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_execution_verifications_execution
+                ON execution_verifications (execution_id, timestamp ASC)
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
         return connection
 
-    def _dump(self, payload: dict) -> str:
+    def _dump(self, payload) -> str:
         return json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 
     def _now(self) -> str:
