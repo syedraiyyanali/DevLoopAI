@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 26 Coding diff preview checkpoint ready to push
+Latest Commit: Step 26 Coding diff preview checkpoint pushed
 Working Tree: clean after Step 26 checkpoint
-Last Push: Step 26 checkpoint ready for origin/main
+Last Push: Step 26 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -542,7 +542,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 23 execution preflight checkpoint is verified, committed, and pushed.
 - Step 24 Coding Agent handoff contract checkpoint is verified, committed, and pushed.
 - Step 25 Coding Agent dry-run checkpoint is verified, committed, and pushed.
-- Step 26 Coding diff-preview checkpoint is verified and ready to push.
+- Step 26 Coding diff-preview checkpoint is verified, committed, and pushed.
 - Step 26 focused diff-preview test initially failed because the Windows text fixture translated newlines; fixed by writing fixture contents as bytes for platform-stable diff assertions.
 - First live Step 25 dry-run attempt reached approved workflow and handoff successfully but returned `502` because the model output did not match the strict dry-run schema; added narrow normalization for common harmless model variations and the live retry passed.
 - First Step 23 pytest attempt used the repo-level `.venv`, which did not have pytest installed; reran successfully with `backend\.venv\Scripts\python.exe`.
@@ -592,7 +592,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 3a24526 - feat: add execution preflight workflow
 - 7d76224 - feat: add coding agent handoff contract
 - ea20088 - feat: add coder dry-run layer
-- Step 26 checkpoint pending - feat: add coder diff preview
+- 6d1a778 - feat: add coder diff preview
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
