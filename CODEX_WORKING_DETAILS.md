@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 05:47:00 +05:00
+Time: 10:02:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 30 frontend apply/verify/rollback controls
-Working Tree: clean after Step 30 feature commit
-Last Push: Step 30 checkpoint pushed to origin/main
+Latest Commit: Step 31 persisted execution history UI
+Working Tree: clean after Step 31 feature commit
+Last Push: Step 31 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Frontend Controlled Execution Review
+Sprint: Sprint 1 - Execution Audit History
 
 ## Current Step
 
-Step: Sprint 1 - Step 30: Frontend Apply, Verify, and Rollback Controls
+Step: Sprint 1 - Step 31: Persisted Execution History UI and Reloadable Audit Details
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 30 frontend execution controls completed, verified, committed, and pushed.
+Step 31 persisted execution history UI and reloadable audit details completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 30 checkpoint when the next task is requested.
+Continue from the verified Step 31 checkpoint when the next task is requested.
 
 ## What Has Been Completed
 
@@ -617,6 +617,22 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Live Step 30 disposable pass scenario: PASS; approved workflow selected through live APIs, preflight and handoff passed, model-backed dry-run/diff eventually applied a valid `sample.py` change, verification persisted `PASSED`, rollback persisted `ROLLED_BACK`, and `sample.py` was restored to `value = 1`.
 - Live Step 30 disposable syntax-error scenario: PASS; deterministic reviewed diff applied invalid Python, `python_compile` returned `FAILED`, rollback was recommended, explicit rollback returned `ROLLED_BACK`, and `sample.py` was restored to `value = 1`.
 - Step 30 headless Chrome click-through automation: BLOCKED by shell policy before Chrome launched; route render and live FastAPI verification were completed instead.
+- Added read-only persisted execution history APIs:
+  - `GET /api/v1/workflows/execution`
+  - `GET /api/v1/workflows/execution/{execution_id}`
+- Execution history responses include execution/workflow IDs, workspace path, status, timestamps, changed files, operation types, hashes, backup status, rollback availability, rollback timestamp, verification count/latest status, rollback recommendation, warnings, blockers, and final current state.
+- Execution detail responses include sanitized per-file audit rows and persisted verification history.
+- History APIs intentionally do not expose approval tokens, snapshot contents, or backup file locations.
+- Extended the frontend Execution Review panel with an Execution History section.
+- Execution History loads newest-first persisted execution records from SQLite-backed APIs, survives browser refresh, and can reload full audit detail by execution ID without relying on previous React memory.
+- Execution audit detail UI shows timeline events, current state, linked workflow ID, workspace path, file hashes, backup status, verification history, rollback recommendation, and rolled-back state.
+- Step 31 focused backend execution-history tests: PASS, `6 passed`.
+- Step 31 full backend pytest: PASS, `169 passed`.
+- Step 31 frontend ESLint: PASS.
+- Step 31 frontend production build: PASS.
+- Step 31 route render smoke check: PASS; Next.js route contains Execution History, reloadable audit copy, Refresh executions, and Apply/Verify/Rollback lifecycle labels.
+- Step 31 disposable persistence verification: PASS through FastAPI TestClient route handlers and SQLite; apply returned `EXECUTED`, verification returned `PASSED`, history/detail included the execution and verification, a fresh `ExecutionStore` could reload the detail, rollback returned `ROLLED_BACK`, history/detail still included the prior verification, and `sample.py` was restored to `value = 1`.
+- Step 31 external Uvicorn restart/live-server verification: SKIPPED/BLOCKED because shell policy rejected process termination and background `Start-Process` commands; in-process FastAPI route verification and full backend tests passed.
 
 ## Known Problems
 
@@ -633,11 +649,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 28 controlled mutation checkpoint is verified, committed, and pushed.
 - Step 29 allowlisted verification runner is verified, committed, and pushed.
 - Step 30 frontend controls are verified, committed, and pushed.
+- Step 31 persisted execution history UI is verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
 - Step 30 live full UI click-through could not be completed: the model-backed dry-run/diff API chain took longer than the PowerShell timeout, and a later headless Chrome CDP launch was blocked by shell policy before Chrome started. Static route render plus live FastAPI disposable apply/verify/rollback verification were completed.
 - During the Step 30 pass scenario, the timed PowerShell pipeline did complete the backend apply after the timeout; persisted audit confirmed `EXECUTED`, verification persisted `PASSED`, rollback persisted `ROLLED_BACK`, and the disposable file was restored.
+- Step 31 could not restart the existing local Uvicorn server because shell policy blocked process termination and blocked background `Start-Process`; route-level FastAPI TestClient verification was used for the new APIs instead.
 - During Step 28, Ollama planning generation failed while allocating an 885,035,008-byte CUDA host buffer. Step 29 direct generation later passed with response `OK`; verification remains independent of Ollama.
 - Initial Step 28 tests incorrectly declared a synthetic `Text` language, causing deterministic preflight to require reapproval; corrected the fixture context.
 - Windows universal-newline conversion initially changed snapshot/content hashes in tests; switched exact safety hashes and snapshot restoration to UTF-8 bytes.
@@ -686,6 +704,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 22 fixed approval/history state loss across backend restarts by moving workflow records from process memory into SQLite.
 - Step 30 exposed missing frontend typing for persisted diff-review metadata; added `review_id`, `review_fingerprint`, and `reviewed_at` to the frontend `CoderDiffPreviewResponse`.
 - Step 30 keeps apply/verify/rollback as explicit user actions in the frontend and clears execution state when upstream preflight, handoff, dry-run, or diff state changes.
+- Step 31 added sanitized history models so execution audit history can be displayed without exposing snapshot paths, snapshot contents, or approval tokens.
+- Step 31 reloads execution history independently from in-memory apply/diff state, so prior executions can be inspected after refresh.
 
 ## Git Commits From Recent Work
 
@@ -700,6 +720,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 57ddcb7 - feat: add allowlisted execution verification
 - 03fdb78 - docs: finalize step 29 checkpoint
 - Step 30 - feat: add frontend execution controls
+- Step 31 - feat: add persisted execution history UI
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -724,6 +745,11 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
+- `backend/app/api/v1/endpoints/execution_history.py`
+- `backend/app/api/v1/router.py`
+- `backend/app/models/execution_history.py`
+- `backend/app/services/execution_store.py`
+- `backend/tests/test_execution_history_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
@@ -738,14 +764,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 31 - Persisted Execution History UI and Reloadable Audit Details.
+Recommended next task: Sprint 1 Step 32 - Deterministic Execution Quality Gate.
 
 ## Next Files Likely to Change
 
-- frontend execution history/list APIs if needed
-- workflow-linked execution audit display
-- reload previous execution, verification, and rollback records after browser refresh
-- preserve current explicit apply/verify/rollback gating
+- backend quality-gate model/service/API combining execution status, verification status, rollback state, and blockers
+- frontend display of final deterministic execution outcome
+- tests for pass/fail/rollback-required/rolled-back states
+- preserve current explicit apply/verify/rollback/history behavior
 
 ## Do Not Forget
 

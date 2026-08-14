@@ -6,8 +6,10 @@ import {
   ApiError,
   applyReviewedChanges,
   createExecutionHandoff,
+  getExecutionHistoryDetail,
   getPlanningWorkflowHistory,
   listExecutionVerifications,
+  listExecutionHistory,
   listPlanningWorkflowHistory,
   rollbackExecution,
   runCoderDiffPreview,
@@ -18,6 +20,8 @@ import {
   type CoderDryRunResponse,
   type ExecutionApplyResponse,
   type ExecutionHandoffResponse,
+  type ExecutionHistoryDetail,
+  type ExecutionHistoryItem,
   type ExecutionPreflightResponse,
   type ExecutionRollbackResponse,
   type ExecutionVerificationResult,
@@ -56,11 +60,16 @@ export default function ExecutionReviewPanel() {
   const [rollback, setRollback] = useState<ExecutionRollbackResponse | null>(null);
   const [verificationTypes, setVerificationTypes] = useState<string[]>(["python_compile"]);
   const [verifications, setVerifications] = useState<ExecutionVerificationResult[]>([]);
+  const [executions, setExecutions] = useState<ExecutionHistoryItem[]>([]);
+  const [selectedExecution, setSelectedExecution] = useState<ExecutionHistoryDetail | null>(null);
+  const [executionHistoryLoading, setExecutionHistoryLoading] = useState(false);
+  const [executionHistoryError, setExecutionHistoryError] = useState("");
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     void loadHistory();
+    void loadExecutionHistory();
   }, []);
 
   const selectedWorkflowId = selectedWorkflow?.workflow_id ?? "";
@@ -121,6 +130,37 @@ export default function ExecutionReviewPanel() {
       setError(getErrorMessage(loadError, "Unable to load workflow history."));
     } finally {
       setLoadingAction(null);
+    }
+  }
+
+  async function loadExecutionHistory() {
+    setExecutionHistoryLoading(true);
+    setExecutionHistoryError("");
+
+    try {
+      const result = await listExecutionHistory();
+      setExecutions(result.executions);
+    } catch (loadError: unknown) {
+      setExecutionHistoryError(
+        getErrorMessage(loadError, "Unable to load execution history."),
+      );
+    } finally {
+      setExecutionHistoryLoading(false);
+    }
+  }
+
+  async function selectExecution(executionId: string) {
+    setExecutionHistoryLoading(true);
+    setExecutionHistoryError("");
+
+    try {
+      setSelectedExecution(await getExecutionHistoryDetail(executionId));
+    } catch (loadError: unknown) {
+      setExecutionHistoryError(
+        getErrorMessage(loadError, "Unable to load execution detail."),
+      );
+    } finally {
+      setExecutionHistoryLoading(false);
     }
   }
 
@@ -218,6 +258,8 @@ export default function ExecutionReviewPanel() {
         setExecution(result);
         setRollback(null);
         setVerifications([]);
+        void loadExecutionHistory();
+        void selectExecution(result.execution_id);
       },
     );
   }
@@ -230,7 +272,11 @@ export default function ExecutionReviewPanel() {
     await runStep(
       "verify",
       () => runExecutionVerification(execution.execution_id, verificationTypes),
-      (result) => setVerifications(result.results),
+      (result) => {
+        setVerifications(result.results);
+        void loadExecutionHistory();
+        void selectExecution(result.execution_id);
+      },
     );
   }
 
@@ -263,6 +309,8 @@ export default function ExecutionReviewPanel() {
       () => rollbackExecution(execution.execution_id),
       (result) => {
         setRollback(result);
+        void loadExecutionHistory();
+        void selectExecution(result.execution_id);
         if (result.status === "ROLLED_BACK") {
           setExecution((current) =>
             current
@@ -449,7 +497,237 @@ export default function ExecutionReviewPanel() {
           ) : null}
         </div>
       </div>
+
+      <ExecutionHistorySection
+        error={executionHistoryError}
+        executions={executions}
+        isLoading={executionHistoryLoading}
+        onRefresh={() => void loadExecutionHistory()}
+        onSelect={(executionId) => void selectExecution(executionId)}
+        selectedExecution={selectedExecution}
+      />
     </section>
+  );
+}
+
+function ExecutionHistorySection({
+  error,
+  executions,
+  isLoading,
+  onRefresh,
+  onSelect,
+  selectedExecution,
+}: {
+  error: string;
+  executions: ExecutionHistoryItem[];
+  isLoading: boolean;
+  onRefresh: () => void;
+  onSelect: (executionId: string) => void;
+  selectedExecution: ExecutionHistoryDetail | null;
+}) {
+  const selectedExecutionId = selectedExecution?.execution_id ?? "";
+
+  return (
+    <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-zinc-950">Execution History</p>
+          <p className="mt-1 text-sm leading-6 text-zinc-600">
+            Reloadable SQLite audit history for applied, verified, failed, and rolled-back executions.
+          </p>
+        </div>
+        <button
+          className="inline-flex h-8 w-fit items-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={isLoading}
+          type="button"
+          onClick={onRefresh}
+        >
+          {isLoading ? "Loading..." : "Refresh executions"}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm leading-6 text-amber-900">{error}</p>
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="max-h-96 space-y-2 overflow-auto pr-1">
+          {executions.length > 0 ? (
+            executions.map((execution) => (
+              <button
+                key={execution.execution_id}
+                className={`w-full rounded-md border bg-white p-3 text-left transition ${
+                  selectedExecutionId === execution.execution_id
+                    ? "border-zinc-950"
+                    : "border-zinc-200 hover:border-zinc-400"
+                }`}
+                disabled={isLoading}
+                type="button"
+                onClick={() => onSelect(execution.execution_id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="break-all text-sm font-medium text-zinc-950">
+                    {execution.execution_id}
+                  </p>
+                  <StatusBadge value={execution.status} />
+                </div>
+                <p className="mt-2 break-all text-xs text-zinc-500">
+                  Workflow: {execution.workflow_id}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Created {formatDate(execution.created_at)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Files: {execution.changed_files.length} | Verifications: {execution.verification_count}
+                </p>
+              </button>
+            ))
+          ) : (
+            <p className="rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-500">
+              No execution records found yet.
+            </p>
+          )}
+        </div>
+
+        {selectedExecution ? (
+          <ExecutionHistoryDetailCard execution={selectedExecution} />
+        ) : (
+          <div className="rounded-md border border-zinc-200 bg-white p-4">
+            <p className="text-sm text-zinc-500">
+              Select an execution to inspect its persisted audit trail after reload.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExecutionHistoryDetailCard({
+  execution,
+}: {
+  execution: ExecutionHistoryDetail;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-700">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="break-all font-semibold text-zinc-950">{execution.execution_id}</p>
+          <p className="mt-1 break-all text-xs text-zinc-500">
+            Workflow: {execution.workflow_id}
+          </p>
+          <p className="mt-1 break-all text-xs text-zinc-500">
+            Workspace: {execution.workspace_path}
+          </p>
+        </div>
+        <StatusBadge value={execution.status} />
+      </div>
+
+      <ExecutionTimeline execution={execution} />
+
+      <div className="mt-4 rounded-md bg-zinc-50 p-3">
+        <p className="text-xs font-medium uppercase text-zinc-500">Current state</p>
+        <p className="mt-1 text-zinc-900">{execution.final_current_state}</p>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-1 gap-2 text-xs text-zinc-600 md:grid-cols-2">
+        <HashRow label="Created" value={formatDate(execution.created_at)} />
+        <HashRow
+          label="Completed"
+          value={execution.completed_at ? formatDate(execution.completed_at) : "None"}
+        />
+        <HashRow
+          label="Rolled back"
+          value={execution.rolled_back_at ? formatDate(execution.rolled_back_at) : "None"}
+        />
+        <HashRow label="Backup status" value={execution.backup_status} />
+        <HashRow
+          label="Rollback available"
+          value={execution.rollback_available ? "Yes" : "No"}
+        />
+        <HashRow
+          label="Rollback recommendation"
+          value={execution.rollback_recommended ? "Recommended" : "Not recommended"}
+        />
+        <HashRow label="Plan fingerprint" value={execution.plan_fingerprint} />
+        <HashRow label="Diff review ID" value={execution.diff_review_id} />
+      </dl>
+
+      <ListBlock label="Changed files" values={execution.changed_files} />
+      <ListBlock label="Operation types" values={execution.operation_types} />
+      <ListBlock label="Warnings" values={execution.warnings} />
+      <ListBlock label="Blockers" values={execution.blockers} />
+
+      <div className="mt-4 space-y-3">
+        {execution.files.map((file) => (
+          <div
+            key={`${file.operation_type}:${file.relative_path}`}
+            className="rounded-md border border-zinc-200 bg-zinc-50 p-3"
+          >
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <p className="break-all text-sm font-medium text-zinc-950">
+                {file.relative_path}
+              </p>
+              <StatusBadge value={file.mutation_status} />
+            </div>
+            <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-600 md:grid-cols-2">
+              <HashRow label="Operation" value={file.operation_type} />
+              <HashRow label="Backup status" value={file.backup_status} />
+              <HashRow label="Original hash" value={file.original_content_hash} />
+              <HashRow label="Proposed hash" value={file.proposed_content_hash} />
+              <HashRow label="Final hash" value={file.final_content_hash} />
+            </dl>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-4">
+        <p className="text-xs font-medium uppercase text-zinc-500">
+          Verification history
+        </p>
+        {execution.verifications.length > 0 ? (
+          execution.verifications.map((verification) => (
+            <VerificationResult key={verification.verification_id} verification={verification} />
+          ))
+        ) : (
+          <p className="text-zinc-500">No verification runs recorded.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExecutionTimeline({ execution }: { execution: ExecutionHistoryDetail }) {
+  const events = [
+    { label: "Approved", value: "Workflow approval recorded" },
+    { label: "Applied", value: execution.completed_at ? formatDate(execution.completed_at) : null },
+    {
+      label: "Verified",
+      value:
+        execution.verifications.length > 0
+          ? latestVerificationState(execution.verifications)
+          : null,
+    },
+    {
+      label: "Rolled Back",
+      value: execution.rolled_back_at ? formatDate(execution.rolled_back_at) : null,
+    },
+  ].filter((event) => event.value);
+
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
+      {events.map((event) => (
+        <div
+          key={event.label}
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900"
+        >
+          <p className="font-medium">{event.label}</p>
+          <p className="mt-1 break-words">{event.value}</p>
+        </div>
+      ))}
+    </div>
   );
 }
 

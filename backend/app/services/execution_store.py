@@ -6,6 +6,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models.coder import CoderDiffPreviewResponse
+from app.models.execution_history import (
+    ExecutionHistoryDetail,
+    ExecutionHistoryFile,
+    ExecutionHistoryItem,
+)
 from app.models.execution_mutation import ExecutionApplyResponse, ExecutionFileResult
 from app.models.execution_verification import ExecutionVerificationResult
 
@@ -175,6 +180,53 @@ class ExecutionStore:
 
         return ExecutionApplyResponse.model_validate(json.loads(row["response_json"]))
 
+    def list_execution_history(self) -> list[ExecutionHistoryItem]:
+        """Return persisted execution history newest-first without sensitive payloads."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT execution_id, workflow_id, plan_fingerprint, diff_review_id,
+                       diff_fingerprint, workspace_path, status, created_at,
+                       completed_at, rolled_back_at, response_json
+                FROM coding_executions
+                ORDER BY rowid DESC
+                """
+            ).fetchall()
+
+        return [self._history_item(row) for row in rows]
+
+    def get_execution_history_detail(self, execution_id: str) -> ExecutionHistoryDetail:
+        """Return one persisted execution audit record with verification history."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT execution_id, workflow_id, plan_fingerprint, diff_review_id,
+                       diff_fingerprint, workspace_path, status, created_at,
+                       completed_at, rolled_back_at, response_json
+                FROM coding_executions
+                WHERE execution_id = ?
+                """,
+                (execution_id,),
+            ).fetchone()
+
+        if row is None:
+            raise ExecutionRecordNotFoundError("Execution ID is invalid.")
+
+        item = self._history_item(row)
+        response = self._execution_response(row)
+        files = self._history_files(execution_id)
+        verifications = self.list_verifications(execution_id)
+
+        return ExecutionHistoryDetail(
+            **item.model_dump(mode="json"),
+            plan_fingerprint=row["plan_fingerprint"],
+            diff_review_id=row["diff_review_id"],
+            diff_fingerprint=row["diff_fingerprint"],
+            files=files,
+            verifications=verifications,
+            message=response.message if response else self._state_message(row["status"]),
+        )
+
     def get_execution_audit(self, execution_id: str) -> dict[str, str]:
         """Return immutable execution linkage fields used by verification checks."""
         with self._connect() as connection:
@@ -216,6 +268,33 @@ class ExecutionStore:
                 proposed_content_hash=row["proposed_content_hash"],
                 final_content_hash=row["final_content_hash"],
                 backup_location=row["backup_location"],
+                backup_status=row["backup_status"],
+            )
+            for row in rows
+        ]
+
+    def _history_files(self, execution_id: str) -> list[ExecutionHistoryFile]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT relative_path, operation_type, original_content_hash,
+                       proposed_content_hash, final_content_hash, backup_status,
+                       mutation_status
+                FROM coding_execution_files
+                WHERE execution_id = ?
+                ORDER BY ordinal ASC
+                """,
+                (execution_id,),
+            ).fetchall()
+
+        return [
+            ExecutionHistoryFile(
+                relative_path=row["relative_path"],
+                operation_type=row["operation_type"],
+                mutation_status=row["mutation_status"],
+                original_content_hash=row["original_content_hash"],
+                proposed_content_hash=row["proposed_content_hash"],
+                final_content_hash=row["final_content_hash"],
                 backup_status=row["backup_status"],
             )
             for row in rows
@@ -290,6 +369,71 @@ class ExecutionStore:
                 ),
             )
         return rolled_back_at
+
+    def _history_item(self, row: sqlite3.Row) -> ExecutionHistoryItem:
+        response = self._execution_response(row)
+        file_results = response.file_results if response else self.get_execution_files(row["execution_id"])
+        verifications = self.list_verifications(row["execution_id"])
+        latest_verification = verifications[-1] if verifications else None
+        changed_files = response.files_changed if response else [
+            result.relative_path
+            for result in file_results
+            if result.status in {"CHANGED", "CREATED", "ROLLED_BACK"}
+        ]
+        backup_status = response.backup_status if response else self._summarize_backup_status(file_results)
+        rollback_available = bool(response.rollback_available) if response else False
+        warnings = response.warnings if response else []
+        blockers = response.blockers if response else []
+
+        return ExecutionHistoryItem(
+            execution_id=row["execution_id"],
+            workflow_id=row["workflow_id"],
+            workspace_path=row["workspace_path"],
+            status=row["status"],
+            created_at=row["created_at"],
+            completed_at=row["completed_at"],
+            rolled_back_at=row["rolled_back_at"],
+            changed_files=changed_files,
+            operation_types=self._unique([result.operation_type for result in file_results]),
+            backup_status=backup_status,
+            rollback_available=rollback_available,
+            verification_count=len(verifications),
+            latest_verification_status=latest_verification.status if latest_verification else None,
+            rollback_recommended=any(result.rollback_recommended for result in verifications),
+            warnings=warnings,
+            blockers=blockers,
+            final_current_state=self._final_current_state(row["status"], verifications),
+        )
+
+    def _execution_response(self, row: sqlite3.Row) -> ExecutionApplyResponse | None:
+        if row["response_json"] is None:
+            return None
+        return ExecutionApplyResponse.model_validate(json.loads(row["response_json"]))
+
+    def _summarize_backup_status(self, file_results: list[ExecutionFileResult]) -> str:
+        statuses = self._unique([result.backup_status for result in file_results])
+        return ", ".join(statuses) if statuses else "UNKNOWN"
+
+    def _final_current_state(
+        self,
+        status: str,
+        verifications: list[ExecutionVerificationResult],
+    ) -> str:
+        if status == "ROLLED_BACK":
+            return "Execution was rolled back from persisted snapshots."
+        if status == "PARTIALLY_FAILED_AND_ROLLED_BACK":
+            return "Execution partially failed and completed mutations were rolled back."
+        if status == "EXECUTED" and any(result.rollback_recommended for result in verifications):
+            return "Execution remains applied; verification recommends rollback."
+        if status == "EXECUTED":
+            return "Execution remains applied."
+        return self._state_message(status)
+
+    def _state_message(self, status: str) -> str:
+        return f"Execution status is {status}."
+
+    def _unique(self, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(values))
 
     def _initialize_database(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)

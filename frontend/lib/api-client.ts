@@ -424,6 +424,55 @@ export interface ExecutionVerificationHistoryResponse {
   verifications: ExecutionVerificationResult[];
 }
 
+export interface ExecutionHistoryFile {
+  relative_path: string;
+  operation_type: string;
+  mutation_status: string;
+  original_content_hash: string | null;
+  proposed_content_hash: string;
+  final_content_hash: string | null;
+  backup_status: string;
+}
+
+export interface ExecutionHistoryItem {
+  execution_id: string;
+  workflow_id: string;
+  workspace_path: string;
+  status:
+    | "IN_PROGRESS"
+    | "EXECUTED"
+    | "BLOCKED"
+    | "REVIEW_STALE"
+    | "ROLLED_BACK"
+    | "PARTIALLY_FAILED_AND_ROLLED_BACK";
+  created_at: string;
+  completed_at: string | null;
+  rolled_back_at: string | null;
+  changed_files: string[];
+  operation_types: string[];
+  backup_status: string;
+  rollback_available: boolean;
+  verification_count: number;
+  latest_verification_status: VerificationStatus | null;
+  rollback_recommended: boolean;
+  warnings: string[];
+  blockers: string[];
+  final_current_state: string;
+}
+
+export interface ExecutionHistoryListResponse {
+  executions: ExecutionHistoryItem[];
+}
+
+export interface ExecutionHistoryDetail extends ExecutionHistoryItem {
+  plan_fingerprint: string;
+  diff_review_id: string;
+  diff_fingerprint: string;
+  files: ExecutionHistoryFile[];
+  verifications: ExecutionVerificationResult[];
+  message: string;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -839,6 +888,18 @@ export async function listExecutionVerifications(
 ): Promise<ExecutionVerificationHistoryResponse> {
   return requestJson<ExecutionVerificationHistoryResponse>(
     `/workflows/execution/${encodeURIComponent(executionId)}/verifications`,
+  );
+}
+
+export async function listExecutionHistory(): Promise<ExecutionHistoryListResponse> {
+  return requestJson<ExecutionHistoryListResponse>("/workflows/execution");
+}
+
+export async function getExecutionHistoryDetail(
+  executionId: string,
+): Promise<ExecutionHistoryDetail> {
+  return requestJson<ExecutionHistoryDetail>(
+    `/workflows/execution/${encodeURIComponent(executionId)}`,
   );
 }
 
