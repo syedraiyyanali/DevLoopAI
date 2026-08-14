@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     chat,
+    coder,
     execution_preflight,
     ollama,
     planner,
@@ -47,6 +48,11 @@ api_router.include_router(
 
 api_router.include_router(
     validator.router,
+    tags=["Agents"],
+)
+
+api_router.include_router(
+    coder.router,
     tags=["Agents"],
 )
 
