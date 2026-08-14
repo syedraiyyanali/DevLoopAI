@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: 14c9b4c - docs: update step 21 working details
-Working Tree: persistent workflow history changes verified; commit pending
-Last Push: 14c9b4c pushed to origin/main
+Latest Commit: 646a0d6 - feat: persist planning workflow history
+Working Tree: clean after Step 22 checkpoint
+Last Push: 646a0d6 pushed to origin/main
 
 ## Current Sprint
 
@@ -29,7 +29,7 @@ Added SQLite-backed planning workflow history and approval audit persistence.
 
 ## Current Goal
 
-Commit the verified Step 22 persistence checkpoint and push it to GitHub.
+Step 22 persistence checkpoint committed and pushed to GitHub.
 
 ## What Has Been Completed
 
@@ -432,7 +432,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Known Problems
 
 - None currently blocking.
-- Step 22 persistence checkpoint is verified; commit/push pending.
+- Step 22 persistence checkpoint is verified, committed, and pushed.
 - Local Ollama 0.32.9 failed to load `qwen2.5-coder:7b` with `llama-server ... invalid argument: --load-mode`; backend handled this as a clear `502`. Tests and deterministic live persistence/API verification passed.
 - Browser approval CDP retry timed out again; API approval/history flow passed and frontend build/lint passed.
 - Browser approval automation with real Ollama workflow timed out after the backend completed the workflow; API approval flow passed, frontend build/lint passed, and the temporary browser script was removed.
@@ -473,6 +473,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Git Commits From Recent Work
 
+- 646a0d6 - feat: persist planning workflow history
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
