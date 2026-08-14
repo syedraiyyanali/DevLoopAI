@@ -9,8 +9,8 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 28 controlled file mutation checkpoint pending
-Working Tree: Step 28 verified changes ready to commit
+Latest Commit: `bd62595` - feat: add controlled file mutation and rollback
+Working Tree: clean after Step 28 feature commit
 Last Push: Step 27 checkpoint pushed to origin/main
 
 ## Current Sprint
@@ -21,15 +21,15 @@ Sprint: Sprint 1 - Controlled File Mutation
 
 Step: Sprint 1 - Step 28: Controlled File Mutation with Snapshot Backup and Rollback
 
-Status: VERIFIED - COMMIT/PUSH PENDING
+Status: COMPLETED
 
 ## Currently Working On
 
-Finalizing the verified controlled mutation, snapshot, audit, and rollback checkpoint.
+Step 28 controlled mutation, snapshot, audit, and rollback checkpoint completed.
 
 ## Current Goal
 
-Commit and push the Step 28 controlled file mutation checkpoint.
+Keep the verified Step 28 checkpoint synchronized with GitHub.
 
 ## What Has Been Completed
 
@@ -646,6 +646,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - ea20088 - feat: add coder dry-run layer
 - 6d1a778 - feat: add coder diff preview
 - 46ffa1c - feat: add execution review frontend panel
+- bd62595 - feat: add controlled file mutation and rollback
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
