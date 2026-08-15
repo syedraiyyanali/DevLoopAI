@@ -473,6 +473,39 @@ export interface ExecutionHistoryDetail extends ExecutionHistoryItem {
   message: string;
 }
 
+export type QualityStatus =
+  | "QUALITY_PASSED"
+  | "QUALITY_FAILED"
+  | "QUALITY_INCOMPLETE"
+  | "ROLLED_BACK"
+  | "BLOCKED";
+
+export interface VerificationSummary {
+  verification_type: string;
+  latest_status: VerificationStatus | null;
+  runs: number;
+  required: boolean;
+}
+
+export interface ExecutionQualityResponse {
+  execution_id: string;
+  workflow_id: string;
+  quality_status: QualityStatus;
+  execution_status: string;
+  required_verification_types: string[];
+  verification_summary: VerificationSummary[];
+  passed_checks: string[];
+  failed_checks: string[];
+  missing_checks: string[];
+  skipped_checks: string[];
+  rollback_status: string;
+  rollback_recommended: boolean;
+  blockers: string[];
+  warnings: string[];
+  reasons: string[];
+  quality_timestamp: string;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -900,6 +933,14 @@ export async function getExecutionHistoryDetail(
 ): Promise<ExecutionHistoryDetail> {
   return requestJson<ExecutionHistoryDetail>(
     `/workflows/execution/${encodeURIComponent(executionId)}`,
+  );
+}
+
+export async function getExecutionQuality(
+  executionId: string,
+): Promise<ExecutionQualityResponse> {
+  return requestJson<ExecutionQualityResponse>(
+    `/workflows/execution/${encodeURIComponent(executionId)}/quality`,
   );
 }
 

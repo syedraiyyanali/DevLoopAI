@@ -7,6 +7,7 @@ import {
   applyReviewedChanges,
   createExecutionHandoff,
   getExecutionHistoryDetail,
+  getExecutionQuality,
   getPlanningWorkflowHistory,
   listExecutionVerifications,
   listExecutionHistory,
@@ -23,6 +24,7 @@ import {
   type ExecutionHistoryDetail,
   type ExecutionHistoryItem,
   type ExecutionPreflightResponse,
+  type ExecutionQualityResponse,
   type ExecutionRollbackResponse,
   type ExecutionVerificationResult,
   type PlanningWorkflowHistoryItem,
@@ -62,6 +64,8 @@ export default function ExecutionReviewPanel() {
   const [verifications, setVerifications] = useState<ExecutionVerificationResult[]>([]);
   const [executions, setExecutions] = useState<ExecutionHistoryItem[]>([]);
   const [selectedExecution, setSelectedExecution] = useState<ExecutionHistoryDetail | null>(null);
+  const [selectedExecutionQuality, setSelectedExecutionQuality] =
+    useState<ExecutionQualityResponse | null>(null);
   const [executionHistoryLoading, setExecutionHistoryLoading] = useState(false);
   const [executionHistoryError, setExecutionHistoryError] = useState("");
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
@@ -154,7 +158,12 @@ export default function ExecutionReviewPanel() {
     setExecutionHistoryError("");
 
     try {
-      setSelectedExecution(await getExecutionHistoryDetail(executionId));
+      const [detail, quality] = await Promise.all([
+        getExecutionHistoryDetail(executionId),
+        getExecutionQuality(executionId),
+      ]);
+      setSelectedExecution(detail);
+      setSelectedExecutionQuality(quality);
     } catch (loadError: unknown) {
       setExecutionHistoryError(
         getErrorMessage(loadError, "Unable to load execution detail."),
@@ -504,6 +513,7 @@ export default function ExecutionReviewPanel() {
         isLoading={executionHistoryLoading}
         onRefresh={() => void loadExecutionHistory()}
         onSelect={(executionId) => void selectExecution(executionId)}
+        quality={selectedExecutionQuality}
         selectedExecution={selectedExecution}
       />
     </section>
@@ -516,6 +526,7 @@ function ExecutionHistorySection({
   isLoading,
   onRefresh,
   onSelect,
+  quality,
   selectedExecution,
 }: {
   error: string;
@@ -523,6 +534,7 @@ function ExecutionHistorySection({
   isLoading: boolean;
   onRefresh: () => void;
   onSelect: (executionId: string) => void;
+  quality: ExecutionQualityResponse | null;
   selectedExecution: ExecutionHistoryDetail | null;
 }) {
   const selectedExecutionId = selectedExecution?.execution_id ?? "";
@@ -533,7 +545,8 @@ function ExecutionHistorySection({
         <div>
           <p className="text-sm font-semibold text-zinc-950">Execution History</p>
           <p className="mt-1 text-sm leading-6 text-zinc-600">
-            Reloadable SQLite audit history for applied, verified, failed, and rolled-back executions.
+            Reloadable SQLite audit history for applied, verified, failed, and rolled-back executions,
+            with a deterministic Quality Gate for selected records.
           </p>
         </div>
         <button
@@ -592,7 +605,10 @@ function ExecutionHistorySection({
         </div>
 
         {selectedExecution ? (
-          <ExecutionHistoryDetailCard execution={selectedExecution} />
+          <ExecutionHistoryDetailCard
+            execution={selectedExecution}
+            quality={quality}
+          />
         ) : (
           <div className="rounded-md border border-zinc-200 bg-white p-4">
             <p className="text-sm text-zinc-500">
@@ -607,8 +623,10 @@ function ExecutionHistorySection({
 
 function ExecutionHistoryDetailCard({
   execution,
+  quality,
 }: {
   execution: ExecutionHistoryDetail;
+  quality: ExecutionQualityResponse | null;
 }) {
   return (
     <div className="rounded-md border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-700">
@@ -626,6 +644,7 @@ function ExecutionHistoryDetailCard({
       </div>
 
       <ExecutionTimeline execution={execution} />
+      <QualityGateCard quality={quality} />
 
       <div className="mt-4 rounded-md bg-zinc-50 p-3">
         <p className="text-xs font-medium uppercase text-zinc-500">Current state</p>
@@ -727,6 +746,72 @@ function ExecutionTimeline({ execution }: { execution: ExecutionHistoryDetail })
           <p className="mt-1 break-words">{event.value}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function QualityGateCard({ quality }: { quality: ExecutionQualityResponse | null }) {
+  if (!quality) {
+    return (
+      <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+        <p className="text-sm text-zinc-500">Quality gate has not loaded yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase text-zinc-500">Quality Gate</p>
+          <p className="mt-1 text-sm font-semibold text-zinc-950">
+            {quality.quality_status.replace("_", " ")}
+          </p>
+        </div>
+        <StatusBadge value={quality.quality_status} />
+      </div>
+      <p className="mt-2 text-sm text-zinc-700">
+        Evaluated {formatDate(quality.quality_timestamp)} from persisted audit state.
+      </p>
+      <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-600 md:grid-cols-2">
+        <HashRow label="Execution status" value={quality.execution_status} />
+        <HashRow label="Rollback status" value={quality.rollback_status} />
+        <HashRow
+          label="Rollback recommended"
+          value={quality.rollback_recommended ? "Yes" : "No"}
+        />
+        <HashRow label="Reasons" value={quality.reasons.join(", ") || "None"} />
+      </dl>
+      <ListBlock label="Required checks" values={quality.required_verification_types} />
+      <ListBlock label="Passed checks" values={quality.passed_checks} />
+      <ListBlock label="Failed checks" values={quality.failed_checks} />
+      <ListBlock label="Missing checks" values={quality.missing_checks} />
+      <ListBlock label="Skipped checks" values={quality.skipped_checks} />
+      <ListBlock label="Warnings" values={quality.warnings} />
+      <ListBlock label="Blockers" values={quality.blockers} />
+      <div className="mt-4 space-y-2">
+        <p className="text-xs font-medium uppercase text-zinc-500">
+          Verification summary
+        </p>
+        {quality.verification_summary.length > 0 ? (
+          quality.verification_summary.map((summary) => (
+            <div
+              key={summary.verification_type}
+              className="flex flex-col gap-1 rounded-md border border-zinc-200 bg-white p-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-sm font-medium text-zinc-900">
+                {summary.verification_type}
+              </p>
+              <p className="text-xs text-zinc-600">
+                {summary.required ? "Required" : "Optional"} | Runs: {summary.runs} | Latest:{" "}
+                {summary.latest_status ?? "None"}
+              </p>
+            </div>
+          ))
+        ) : (
+          <p className="text-zinc-500">No verification summary available.</p>
+        )}
+      </div>
     </div>
   );
 }

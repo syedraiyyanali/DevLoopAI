@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 10:02:00 +05:00
+Time: 10:12:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 31 persisted execution history UI
-Working Tree: clean after Step 31 feature commit
-Last Push: Step 31 checkpoint pushed to origin/main
+Latest Commit: Step 32 deterministic execution quality gate
+Working Tree: clean after Step 32 feature commit
+Last Push: Step 32 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Execution Audit History
+Sprint: Sprint 1 - Execution Quality Gate
 
 ## Current Step
 
-Step: Sprint 1 - Step 31: Persisted Execution History UI and Reloadable Audit Details
+Step: Sprint 1 - Step 32: Deterministic Execution Quality Gate
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 31 persisted execution history UI and reloadable audit details completed, verified, committed, and pushed.
+Step 32 deterministic execution quality gate completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 31 checkpoint when the next task is requested.
+Continue from the verified Step 32 checkpoint when the next task is requested.
 
 ## What Has Been Completed
 
@@ -633,6 +633,31 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 route render smoke check: PASS; Next.js route contains Execution History, reloadable audit copy, Refresh executions, and Apply/Verify/Rollback lifecycle labels.
 - Step 31 disposable persistence verification: PASS through FastAPI TestClient route handlers and SQLite; apply returned `EXECUTED`, verification returned `PASSED`, history/detail included the execution and verification, a fresh `ExecutionStore` could reload the detail, rollback returned `ROLLED_BACK`, history/detail still included the prior verification, and `sample.py` was restored to `value = 1`.
 - Step 31 external Uvicorn restart/live-server verification: SKIPPED/BLOCKED because shell policy rejected process termination and background `Start-Process` commands; in-process FastAPI route verification and full backend tests passed.
+- Added deterministic read-only execution quality endpoint:
+  - `GET /api/v1/workflows/execution/{execution_id}/quality`
+- Added quality statuses: `QUALITY_PASSED`, `QUALITY_FAILED`, `QUALITY_INCOMPLETE`, `ROLLED_BACK`, and `BLOCKED`.
+- Quality gate uses persisted execution audit, persisted verification history, workspace/file current state, and deterministic policy only.
+- Quality gate does not call Ollama, write files, execute shell commands, run verification, rollback, retry, install packages, or perform Git operations.
+- Required verification policy:
+  - Python changed files require `python_compile`.
+  - Python changed files also require `pytest` when a pytest project is detected through `tests/`, `test_*.py`, `pytest.ini`, or `pyproject.toml`.
+  - Frontend changed files require `frontend_lint` when a visible `package.json` defines `lint`.
+  - Frontend changed files require `frontend_build` when a visible `package.json` defines `build`.
+  - Non-required failed checks are summarized but do not fail required policy.
+- Stale-state safeguards re-check workspace existence, affected file existence, created file existence, and current file hashes against persisted final execution hashes.
+- Post-execution file changes return `BLOCKED` instead of preserving an old `QUALITY_PASSED`.
+- Frontend execution audit detail now loads and displays the deterministic Quality Gate for selected execution records.
+- Quality UI shows status, execution status, rollback status, rollback recommendation, required/passed/failed/missing/skipped checks, warnings, blockers, reason codes, and verification summary.
+- Step 32 focused quality-gate tests: PASS, `15 passed`.
+- Step 32 Python compile check: PASS.
+- Step 32 full backend pytest: PASS, `184 passed`.
+- Step 32 frontend ESLint: PASS.
+- Step 32 frontend production build: PASS.
+- Step 32 route render smoke check: PASS; Next.js route contains Execution History, deterministic Quality Gate copy, and Apply/Verify/Rollback lifecycle labels.
+- Step 32 disposable scenario A: PASS; valid mutation + `python_compile` passed -> `QUALITY_PASSED`.
+- Step 32 disposable scenario B: PASS; syntax-error mutation + `python_compile` failed -> `QUALITY_FAILED`, rollback recommended, explicit rollback -> `ROLLED_BACK`.
+- Step 32 disposable scenario C: PASS; valid mutation with no required verification -> `QUALITY_INCOMPLETE` with missing `python_compile`.
+- Step 32 disposable scenario D: PASS; valid mutation + passing verification initially -> `QUALITY_PASSED`, then manual file alteration -> `BLOCKED`.
 
 ## Known Problems
 
@@ -650,12 +675,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 29 allowlisted verification runner is verified, committed, and pushed.
 - Step 30 frontend controls are verified, committed, and pushed.
 - Step 31 persisted execution history UI is verified, committed, and pushed.
+- Step 32 deterministic execution quality gate is verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
 - Step 30 live full UI click-through could not be completed: the model-backed dry-run/diff API chain took longer than the PowerShell timeout, and a later headless Chrome CDP launch was blocked by shell policy before Chrome started. Static route render plus live FastAPI disposable apply/verify/rollback verification were completed.
 - During the Step 30 pass scenario, the timed PowerShell pipeline did complete the backend apply after the timeout; persisted audit confirmed `EXECUTED`, verification persisted `PASSED`, rollback persisted `ROLLED_BACK`, and the disposable file was restored.
 - Step 31 could not restart the existing local Uvicorn server because shell policy blocked process termination and blocked background `Start-Process`; route-level FastAPI TestClient verification was used for the new APIs instead.
+- Step 32 disposable verification used FastAPI TestClient route handlers with isolated SQLite/runtime data, because prior shell policy still prevents reliable external Uvicorn restart from this session.
 - During Step 28, Ollama planning generation failed while allocating an 885,035,008-byte CUDA host buffer. Step 29 direct generation later passed with response `OK`; verification remains independent of Ollama.
 - Initial Step 28 tests incorrectly declared a synthetic `Text` language, causing deterministic preflight to require reapproval; corrected the fixture context.
 - Windows universal-newline conversion initially changed snapshot/content hashes in tests; switched exact safety hashes and snapshot restoration to UTF-8 bytes.
@@ -706,6 +733,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 30 keeps apply/verify/rollback as explicit user actions in the frontend and clears execution state when upstream preflight, handoff, dry-run, or diff state changes.
 - Step 31 added sanitized history models so execution audit history can be displayed without exposing snapshot paths, snapshot contents, or approval tokens.
 - Step 31 reloads execution history independently from in-memory apply/diff state, so prior executions can be inspected after refresh.
+- Step 32 centralizes deterministic final execution outcome rules before any future single-task execution workflow.
+- Step 32 prevents stale verified states from remaining quality-passed after affected files change.
 
 ## Git Commits From Recent Work
 
@@ -721,6 +750,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 03fdb78 - docs: finalize step 29 checkpoint
 - Step 30 - feat: add frontend execution controls
 - Step 31 - feat: add persisted execution history UI
+- Step 32 - feat: add deterministic execution quality gate
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -746,10 +776,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `backend/app/api/v1/endpoints/execution_history.py`
+- `backend/app/api/v1/endpoints/execution_quality.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/models/execution_history.py`
+- `backend/app/models/execution_quality.py`
+- `backend/app/services/execution_quality.py`
 - `backend/app/services/execution_store.py`
 - `backend/tests/test_execution_history_api.py`
+- `backend/tests/test_execution_quality_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
@@ -764,14 +798,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 32 - Deterministic Execution Quality Gate.
+Recommended next task: Sprint 1 Step 33 - Controlled Single-Task Execution Workflow.
 
 ## Next Files Likely to Change
 
-- backend quality-gate model/service/API combining execution status, verification status, rollback state, and blockers
-- frontend display of final deterministic execution outcome
-- tests for pass/fail/rollback-required/rolled-back states
-- preserve current explicit apply/verify/rollback/history behavior
+- orchestration endpoint/UI for one approved workflow through preflight, handoff, dry-run, diff, explicit apply, explicit verify, and quality gate
+- preserve explicit user controls and avoid autonomous retry loops
+- reuse persisted execution history and quality gate
+- keep rollback explicit
 
 ## Do Not Forget
 

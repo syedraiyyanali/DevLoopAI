@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     execution_history,
     execution_mutation,
     execution_preflight,
+    execution_quality,
     execution_verification,
     ollama,
     planner,
@@ -76,6 +77,11 @@ api_router.include_router(
 
 api_router.include_router(
     execution_verification.router,
+    tags=["Workflows"],
+)
+
+api_router.include_router(
+    execution_quality.router,
     tags=["Workflows"],
 )
 
