@@ -683,6 +683,27 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 33 disposable scenario A: PASS; prepare did not mutate file, explicit apply changed file, required verification passed, Quality Gate returned `QUALITY_PASSED`, and task session reloaded from persistence.
 - Step 33 disposable scenario B: PASS; syntax-breaking change applied explicitly, verification failed, Quality Gate returned `QUALITY_FAILED`, rollback was recommended, explicit rollback returned `ROLLED_BACK`, and original file content was restored.
 - Step 33 disposable scenario C: PASS; prepared reviewed diff became stale after manual file change before apply, apply returned `BLOCKED`, and the newer file content was not overwritten.
+- Added bounded improve-and-retry support for controlled task execution.
+- Added task states `RETRY_PREPARING` and `RETRY_LIMIT_REACHED`.
+- Retry is eligible only from `QUALITY_FAILED`; it is blocked for `QUALITY_PASSED`, `ROLLED_BACK`, stale `BLOCKED` quality state, wrong state, missing failed execution audit, stale workflow fingerprint, or exhausted attempts.
+- Retry limit is server-side: `max_attempts = 3`, counting the original execution as attempt 1.
+- Retry preparation builds a sanitized failure context from persisted audit data: failed verification type/status/exit code/output excerpts, quality reasons/blockers, changed file paths/operations/hashes, prior diff summary, parent execution ID, parent diff review ID, current attempt, and next attempt.
+- Retry preparation never mutates files, runs project commands, installs dependencies, rolls back, commits, pushes, or weakens schema validation.
+- Retry uses Ollama only during the existing dry-run/diff proposal path. If retry proposal generation fails, no attempt is consumed and the task remains at `QUALITY_FAILED`.
+- Every retry creates a new reviewed diff identity and attempt lineage entry, then returns to `AWAITING_EXECUTION_APPROVAL`; explicit Apply is still required before any mutation.
+- Applying retry attempts reuses the controlled mutation service and applies only the persisted reviewed diff content. Mutation still verifies exact reviewed diff identity and current file content before writing.
+- Retry Apply has a narrow audited-retry path because ordinary original preflight correctly sees the project changed after the failed mutation. The retry path is allowed only through the persisted task session, prior ready handoff, approved workflow/fingerprint, and current failed execution audit.
+- Attempt lineage persists attempt number, state, parent execution ID, parent diff review ID, current diff review ID, mutation execution ID, verification IDs, quality status, failure-context hash, timestamps, and message.
+- Frontend Controlled Single-Task Execution now shows attempt count, remaining retries, attempt lineage, failure-context hash, parent execution, and a gated `Prepare improvement retry` control.
+- Step 34 focused task execution tests: PASS, `17 passed`.
+- Step 34 Python compile check: PASS.
+- Step 34 full backend pytest: PASS, `201 passed`.
+- Step 34 frontend ESLint: PASS.
+- Step 34 frontend production build: PASS.
+- Step 34 route render smoke check: PASS; Next.js production route returned HTTP 200. Raw HTML cannot see the client-rendered retry button text, so the smoke checked successful route rendering only.
+- Step 34 disposable scenario A: PASS via focused tests; syntax-error attempt reached `QUALITY_FAILED`, retry prepared attempt 2 without mutating files, explicit apply changed the file, verification passed, and Quality Gate returned `QUALITY_PASSED`.
+- Step 34 disposable scenario B: PASS via focused tests; attempts 1, 2, and 3 failed verification, no fourth retry was created, and final task state became `RETRY_LIMIT_REACHED`.
+- Step 34 disposable scenario C: PASS via focused tests; after a failed attempt, manual file modification caused retry to return `BLOCKED` without generating a new proposal or overwriting the newer file.
 
 ## Known Problems
 
@@ -702,6 +723,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 persisted execution history UI is verified, committed, and pushed.
 - Step 32 deterministic execution quality gate is verified, committed, and pushed.
 - Step 33 controlled single-task execution workflow is verified, committed, and pushed.
+- Step 34 bounded improve-and-retry loop is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -763,6 +785,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 32 prevents stale verified states from remaining quality-passed after affected files change.
 - Step 33 preserves the approval boundary between reviewed plan approval and explicit mutation approval after exact diff review.
 - Step 33 reuses existing safety services instead of duplicating approval, preflight, handoff, mutation, verification, quality, or rollback logic.
+- Step 34 preserves the same explicit mutation approval boundary for retry attempts; retry preparation creates a new reviewed diff only.
+- Step 34 fixed the retry/preflight interaction by making retry evaluate the current failed execution audit instead of requiring the original pre-mutation project preflight to still match after an intentional failed mutation.
 
 ## Git Commits From Recent Work
 
@@ -780,6 +804,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 - feat: add persisted execution history UI
 - Step 32 - feat: add deterministic execution quality gate
 - Step 33 - feat: add controlled task execution workflow
+- Step 34 - pending commit: feat: add bounded task retry workflow
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -804,19 +829,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/execution_history.py`
-- `backend/app/api/v1/endpoints/execution_quality.py`
 - `backend/app/api/v1/endpoints/task_execution.py`
-- `backend/app/api/v1/router.py`
-- `backend/app/models/execution_history.py`
-- `backend/app/models/execution_quality.py`
+- `backend/app/agents/coder.py`
+- `backend/app/models/coder.py`
+- `backend/app/models/execution_mutation.py`
 - `backend/app/models/task_execution.py`
-- `backend/app/services/execution_quality.py`
+- `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
-- `backend/app/services/task_execution_store.py`
-- `backend/app/services/execution_store.py`
-- `backend/tests/test_execution_history_api.py`
-- `backend/tests/test_execution_quality_api.py`
 - `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
@@ -832,14 +851,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 34 - Bounded Improve-and-Retry Loop.
+Recommended next task: Sprint 1 Step 35 - Bounded Autonomous Task Mode.
 
 ## Next Files Likely to Change
 
-- new revision proposal after failed quality
-- bounded retry count
-- every retry must create a new reviewed diff and require explicit apply approval
-- preserve current single-task execution state machine and audit trail
+- controlled auto-preparation of the next retry after failed quality
+- preserve explicit user approval before every mutation
+- avoid autonomous apply/rollback/command execution
+- continue using persisted attempt lineage and deterministic quality gate
 
 ## Do Not Forget
 

@@ -113,6 +113,19 @@ def verify_task_execution(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
+@router.post("/{task_execution_id}/retry", response_model=TaskExecutionSession)
+async def retry_task_execution(
+    task_execution_id: str,
+    request: TaskExecutionActionRequest | None = None,
+) -> TaskExecutionSession:
+    try:
+        return await get_task_execution_service().retry(task_execution_id, request)
+    except TaskExecutionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (TaskExecutionBlockedError, ExecutionRecordNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
 @router.post("/{task_execution_id}/rollback", response_model=TaskExecutionSession)
 def rollback_task_execution(
     task_execution_id: str,
@@ -124,4 +137,3 @@ def rollback_task_execution(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (TaskExecutionBlockedError, ExecutionRecordNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-

@@ -21,6 +21,7 @@ class ExecutionApplyRequest(BaseModel):
     handoff: ExecutionHandoffResponse
     dry_run: CoderDryRunResponse
     diff_preview: CoderDiffPreviewResponse
+    allow_audited_retry_state: bool = False
 
 
 class ExecutionFileResult(BaseModel):

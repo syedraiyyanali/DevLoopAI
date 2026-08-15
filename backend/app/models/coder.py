@@ -9,6 +9,7 @@ class CoderDryRunRequest(BaseModel):
     """
     handoff: ExecutionHandoffResponse
     model: str | None = None
+    retry_context: dict | None = None
 
 
 class CoderDryRunOperation(BaseModel):
@@ -66,6 +67,8 @@ class CoderDiffPreviewRequest(BaseModel):
     """
     dry_run: CoderDryRunResponse
     model: str | None = None
+    retry_context: dict | None = None
+    handoff: ExecutionHandoffResponse | None = None
 
 
 class CoderDiffProposalFileChange(BaseModel):

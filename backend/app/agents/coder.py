@@ -60,15 +60,18 @@ class CoderDryRunAgent:
         """
         Simulate future coding work without writing files or running commands.
         """
-        canonical_handoff = self.handoff_service.create_handoff(
-            request=ExecutionHandoffRequest(workflow_id=request.handoff.workflow_id)
-        )
+        if request.retry_context is None:
+            canonical_handoff = self.handoff_service.create_handoff(
+                request=ExecutionHandoffRequest(workflow_id=request.handoff.workflow_id)
+            )
+        else:
+            canonical_handoff = request.handoff
         self._validate_handoff(
             submitted=request.handoff,
             canonical=canonical_handoff,
         )
 
-        prompt = self._build_prompt(canonical_handoff)
+        prompt = self._build_prompt(canonical_handoff, request.retry_context)
 
         try:
             model_response = await self.ollama_service.generate_chat_response(
@@ -195,8 +198,13 @@ class CoderDryRunAgent:
                 "Model reported blockers: " + " ".join(payload.blockers)
             )
 
-    def _build_prompt(self, handoff: ExecutionHandoffResponse) -> str:
+    def _build_prompt(
+        self,
+        handoff: ExecutionHandoffResponse,
+        retry_context: dict | None = None,
+    ) -> str:
         safe_handoff_payload = handoff.model_dump(mode="json")
+        safe_retry_context = {} if retry_context is None else retry_context
 
         return (
             "You are DevLoopAI's zero-write Coding Agent dry-run simulator. "
@@ -230,7 +238,10 @@ class CoderDryRunAgent:
             "- Do not request command execution or dependency installation.\n"
             "- Keep mutation capabilities disabled.\n\n"
             "Approved handoff contract:\n"
-            f"{json.dumps(safe_handoff_payload, ensure_ascii=True)}"
+            f"{json.dumps(safe_handoff_payload, ensure_ascii=True)}\n\n"
+            "Retry failure context, if present. Use it only to improve the new proposal; "
+            "do not expose secrets or claim execution:\n"
+            f"{json.dumps(safe_retry_context, ensure_ascii=True)}"
         )
 
     def _parse_model_payload(self, raw_response: str) -> CoderDryRunModelPayload:
@@ -360,9 +371,14 @@ class CoderDiffPreviewAgent:
         self,
         request: CoderDiffPreviewRequest,
     ) -> CoderDiffPreviewResponse:
-        canonical_handoff = self.handoff_service.create_handoff(
-            request=ExecutionHandoffRequest(workflow_id=request.dry_run.workflow_id)
-        )
+        if request.retry_context is None:
+            canonical_handoff = self.handoff_service.create_handoff(
+                request=ExecutionHandoffRequest(workflow_id=request.dry_run.workflow_id)
+            )
+        elif request.handoff is not None:
+            canonical_handoff = request.handoff
+        else:
+            raise CoderDryRunBlockedError("Retry diff preview requires the approved handoff.")
         self._validate_dry_run(
             dry_run=request.dry_run,
             handoff=canonical_handoff,

@@ -516,9 +516,26 @@ export type TaskExecutionState =
   | "QUALITY_PASSED"
   | "QUALITY_FAILED"
   | "QUALITY_INCOMPLETE"
+  | "RETRY_PREPARING"
+  | "RETRY_LIMIT_REACHED"
   | "BLOCKED"
   | "ROLLED_BACK"
   | "FAILED";
+
+export interface TaskExecutionAttempt {
+  attempt_number: number;
+  state: TaskExecutionState;
+  parent_execution_id: string | null;
+  parent_diff_review_id: string | null;
+  diff_review_id: string | null;
+  mutation_execution_id: string | null;
+  verification_ids: string[];
+  quality_status: string | null;
+  failure_context_hash: string | null;
+  created_at: string;
+  updated_at: string;
+  message: string;
+}
 
 export interface TaskExecutionSession {
   task_execution_id: string;
@@ -528,6 +545,9 @@ export interface TaskExecutionSession {
   state: TaskExecutionState;
   created_at: string;
   updated_at: string;
+  current_attempt: number;
+  max_attempts: number;
+  attempts: TaskExecutionAttempt[];
   diff_review_id: string | null;
   mutation_execution_id: string | null;
   verification_ids: string[];
@@ -1027,9 +1047,16 @@ export async function rollbackTaskExecution(
   return taskExecutionAction(taskExecutionId, "rollback", expectedState);
 }
 
+export async function retryTaskExecution(
+  taskExecutionId: string,
+  expectedState?: TaskExecutionState,
+): Promise<TaskExecutionSession> {
+  return taskExecutionAction(taskExecutionId, "retry", expectedState);
+}
+
 function taskExecutionAction(
   taskExecutionId: string,
-  action: "apply" | "verify" | "rollback",
+  action: "apply" | "verify" | "rollback" | "retry",
   expectedState?: TaskExecutionState,
 ): Promise<TaskExecutionSession> {
   return requestJson<TaskExecutionSession>(

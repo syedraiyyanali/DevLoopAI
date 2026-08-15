@@ -16,6 +16,7 @@ import {
   listPlanningWorkflowHistory,
   rollbackExecution,
   rollbackTaskExecution,
+  retryTaskExecution,
   runCoderDiffPreview,
   runCoderDryRun,
   runExecutionPreflight,
@@ -51,6 +52,7 @@ type LoadingAction =
   | "task-apply"
   | "task-verify"
   | "task-rollback"
+  | "task-retry"
   | null;
 
 const SERVER_ALLOWED_VERIFICATIONS = [
@@ -274,6 +276,18 @@ export default function ExecutionReviewPanel() {
           void selectExecution(result.mutation_execution_id);
         }
       },
+    );
+  }
+
+  async function retryFailedTask() {
+    if (!taskExecution) {
+      return;
+    }
+
+    await runStep(
+      "task-retry",
+      () => retryTaskExecution(taskExecution.task_execution_id, taskExecution.state),
+      (result) => setTaskExecution(result),
     );
   }
 
@@ -615,11 +629,13 @@ export default function ExecutionReviewPanel() {
         isApplying={loadingAction === "task-apply"}
         isPreparing={loadingAction === "task-prepare"}
         isRollingBack={loadingAction === "task-rollback"}
+        isRetrying={loadingAction === "task-retry"}
         isVerifying={loadingAction === "task-verify"}
         onApply={() => void applyPreparedTask()}
         onLoad={() => void loadTaskExecution()}
         onPrepare={() => void prepareSelectedTask()}
         onRollback={() => void rollbackTask()}
+        onRetry={() => void retryFailedTask()}
         onTaskIdChange={setTaskExecutionIdInput}
         onVerify={() => void verifyAppliedTask()}
         selectedWorkflow={selectedWorkflow}
@@ -644,11 +660,13 @@ function ControlledTaskSection({
   isApplying,
   isPreparing,
   isRollingBack,
+  isRetrying,
   isVerifying,
   onApply,
   onLoad,
   onPrepare,
   onRollback,
+  onRetry,
   onTaskIdChange,
   onVerify,
   selectedWorkflow,
@@ -658,11 +676,13 @@ function ControlledTaskSection({
   isApplying: boolean;
   isPreparing: boolean;
   isRollingBack: boolean;
+  isRetrying: boolean;
   isVerifying: boolean;
   onApply: () => void;
   onLoad: () => void;
   onPrepare: () => void;
   onRollback: () => void;
+  onRetry: () => void;
   onTaskIdChange: (value: string) => void;
   onVerify: () => void;
   selectedWorkflow: PlanningWorkflowHistoryRecord | null;
@@ -678,6 +698,13 @@ function ControlledTaskSection({
     Boolean(taskExecution?.mutation_execution_id) &&
     taskExecution?.state !== "ROLLED_BACK" &&
     !isRollingBack;
+  const canRetry =
+    taskExecution?.state === "QUALITY_FAILED" &&
+    taskExecution.current_attempt < taskExecution.max_attempts &&
+    !isRetrying;
+  const remainingAttempts = taskExecution
+    ? Math.max(taskExecution.max_attempts - taskExecution.current_attempt, 0)
+    : 0;
 
   return (
     <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
@@ -688,8 +715,8 @@ function ControlledTaskSection({
           Planning approval alone never applies files.
         </p>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-5">
-        {["Prepare", "Review Diff", "Apply", "Verify", "Quality"].map((label) => (
+      <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-6">
+        {["Prepare", "Review Diff", "Apply", "Verify", "Quality", "Retry"].map((label) => (
           <div key={label} className="rounded-md border border-zinc-200 bg-white px-3 py-2">
             <p className="font-medium text-zinc-900">{label}</p>
           </div>
@@ -736,6 +763,46 @@ function ControlledTaskSection({
             <StatusBadge value={taskExecution.state} />
           </div>
           <p className="mt-3">{taskExecution.message}</p>
+          <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+            <p className="font-semibold text-zinc-950">
+              Attempt {taskExecution.current_attempt} of {taskExecution.max_attempts}
+            </p>
+            <p>
+              Remaining improvement retries: {remainingAttempts}. Every retry returns to reviewed diff
+              and requires explicit Apply before files can change.
+            </p>
+          </div>
+          {taskExecution.attempts.length > 0 ? (
+            <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase text-zinc-500">
+                Attempt lineage
+              </p>
+              <div className="mt-2 grid gap-2">
+                {taskExecution.attempts.map((attempt) => (
+                  <div
+                    key={`${attempt.attempt_number}-${attempt.diff_review_id ?? "none"}`}
+                    className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="font-medium text-zinc-950">Attempt {attempt.attempt_number}</p>
+                      <StatusBadge value={attempt.state} />
+                    </div>
+                    <HashRow label="Diff review" value={attempt.diff_review_id ?? "Not prepared"} />
+                    <HashRow label="Execution" value={attempt.mutation_execution_id ?? "Not applied"} />
+                    <HashRow label="Quality" value={attempt.quality_status ?? "Not evaluated"} />
+                    <HashRow
+                      label="Parent execution"
+                      value={attempt.parent_execution_id ?? "Initial attempt"}
+                    />
+                    <HashRow
+                      label="Failure context"
+                      value={attempt.failure_context_hash ?? "Not a retry"}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <ListBlock label="Warnings" values={taskExecution.warnings} />
           <ListBlock label="Blockers" values={taskExecution.blockers} />
           {taskExecution.diff_preview ? (
@@ -771,6 +838,14 @@ function ControlledTaskSection({
               onClick={onRollback}
             >
               {isRollingBack ? "Rolling back..." : "Rollback task"}
+            </button>
+            <button
+              className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+              disabled={!canRetry}
+              type="button"
+              onClick={onRetry}
+            >
+              {isRetrying ? "Preparing retry..." : "Prepare improvement retry"}
             </button>
           </div>
         </div>

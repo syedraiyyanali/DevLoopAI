@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -9,6 +11,7 @@ from app.models.execution_preflight import ExecutionPreflightRequest
 from app.models.execution_verification import ExecutionVerificationRequest
 from app.models.task_execution import (
     TaskExecutionActionRequest,
+    TaskExecutionAttempt,
     TaskExecutionPrepareRequest,
     TaskExecutionSession,
 )
@@ -92,6 +95,14 @@ class ControlledTaskExecutionService:
             session.diff_preview = diff_preview
             session.diff_review_id = diff_preview.review_id
             session.state = "AWAITING_EXECUTION_APPROVAL"
+            session.attempts = [
+                self._make_attempt(
+                    attempt_number=1,
+                    state="AWAITING_EXECUTION_APPROVAL",
+                    diff_review_id=diff_preview.review_id,
+                    message="Initial reviewed diff prepared.",
+                )
+            ]
             session.warnings = [*handoff.warnings, *dry_run.warnings, *diff_preview.warnings]
             session.blockers = []
             session.message = "Task prepared through reviewed diff. Explicit apply approval is required."
@@ -117,6 +128,7 @@ class ControlledTaskExecutionService:
             raise TaskExecutionBlockedError("Task is not awaiting execution approval.")
         if not session.handoff or not session.dry_run or not session.diff_preview:
             raise TaskExecutionBlockedError("Prepared task artifacts are incomplete.")
+        self._ensure_latest_attempt_matches_active_diff(session)
 
         session.state = "APPLYING"
         self.task_store.update(session)
@@ -125,6 +137,7 @@ class ControlledTaskExecutionService:
                 handoff=session.handoff,
                 dry_run=session.dry_run,
                 diff_preview=session.diff_preview,
+                allow_audited_retry_state=session.current_attempt > 1,
             )
         )
         session.apply_result = apply_result
@@ -140,6 +153,12 @@ class ControlledTaskExecutionService:
         else:
             session.state = "BLOCKED"
             session.message = "Apply was blocked. No successful task mutation is current."
+        self._update_current_attempt(
+            session,
+            state=session.state,
+            mutation_execution_id=apply_result.execution_id,
+            message=session.message,
+        )
         return self.task_store.update(session)
 
     def verify(
@@ -173,7 +192,20 @@ class ControlledTaskExecutionService:
         session.blockers = list(quality.blockers)
         session.warnings = [*session.warnings, *quality.warnings]
         session.state = self._quality_state(quality.quality_status)
+        if session.state == "QUALITY_FAILED" and session.current_attempt >= session.max_attempts:
+            session.state = "RETRY_LIMIT_REACHED"
+            session.blockers = [
+                *session.blockers,
+                "Retry limit reached. No further improvement retry can be prepared.",
+            ]
         session.message = f"Verification completed. Quality gate returned {quality.quality_status}."
+        self._update_current_attempt(
+            session,
+            state=session.state,
+            verification_ids=[item.verification_id for item in results],
+            quality_status=quality.quality_status,
+            message=session.message,
+        )
         return self.task_store.update(session)
 
     def rollback(
@@ -198,6 +230,118 @@ class ControlledTaskExecutionService:
             session.state = "BLOCKED"
             session.blockers = [*session.blockers, *rollback.blockers]
         session.message = rollback.message
+        self._update_current_attempt(session, state=session.state, message=session.message)
+        return self.task_store.update(session)
+
+    async def retry(
+        self,
+        task_execution_id: str,
+        request: TaskExecutionActionRequest | None = None,
+    ) -> TaskExecutionSession:
+        session = self.task_store.get(task_execution_id)
+        self._ensure_state_guard(session, request)
+        if session.state != "QUALITY_FAILED":
+            raise TaskExecutionBlockedError("Retry is only allowed after QUALITY_FAILED.")
+        if session.current_attempt >= session.max_attempts:
+            session.state = "RETRY_LIMIT_REACHED"
+            session.blockers = [
+                *session.blockers,
+                "Retry limit reached. No further improvement retry can be prepared.",
+            ]
+            session.message = "Retry limit reached. No files were modified."
+            return self.task_store.update(session)
+        if not session.mutation_execution_id or not session.diff_review_id:
+            raise TaskExecutionBlockedError("Retry requires an applied failed attempt and reviewed diff.")
+
+        current_quality = self.quality_gate.evaluate(session.mutation_execution_id)
+        if current_quality.quality_status != "QUALITY_FAILED":
+            session.state = "BLOCKED"
+            session.quality_result = current_quality
+            session.blockers = [
+                *current_quality.blockers,
+                "Retry blocked because the failed execution audit is no longer current.",
+            ]
+            session.message = "Retry blocked by stale or unsafe current execution state."
+            return self.task_store.update(session)
+
+        previous_state = session.state
+        previous_attempt = session.current_attempt
+        retry_context = self._build_retry_context(session, current_quality)
+        retry_context_hash = self._stable_hash(retry_context)
+
+        session.state = "RETRY_PREPARING"
+        session.message = "Preparing bounded improvement retry. No files have been modified."
+        session.updated_at = self._now()
+        self.task_store.update(session)
+
+        try:
+            workflow = self.approval_store.get_workflow(session.workflow_id)
+            if workflow.approval_status != "APPROVED":
+                raise TaskExecutionBlockedError("Retry requires an approved workflow.")
+            if workflow.plan_fingerprint != session.plan_fingerprint:
+                raise TaskExecutionBlockedError("Retry blocked by stale workflow fingerprint.")
+            if not session.preflight or session.preflight.status != "READY_FOR_EXECUTION":
+                raise TaskExecutionBlockedError("Retry requires a previously ready preflight.")
+            if not session.handoff:
+                raise TaskExecutionBlockedError("Retry requires the approved handoff contract.")
+
+            preflight = session.preflight
+            handoff = session.handoff
+            dry_run = await self.dry_run_agent.dry_run(
+                CoderDryRunRequest(
+                    handoff=handoff,
+                    model=None,
+                    retry_context=retry_context,
+                )
+            )
+            diff_preview = await self.diff_preview_agent.preview_diff(
+                CoderDiffPreviewRequest(
+                    dry_run=dry_run,
+                    model=None,
+                    retry_context=retry_context,
+                    handoff=handoff,
+                )
+            )
+            session.current_attempt = previous_attempt + 1
+            session.preflight = preflight
+            session.handoff = handoff
+            session.dry_run = dry_run
+            session.diff_preview = diff_preview
+            session.diff_review_id = diff_preview.review_id
+            session.mutation_execution_id = None
+            session.apply_result = None
+            session.verification_results = []
+            session.verification_ids = []
+            session.quality_result = None
+            session.rollback_status = None
+            session.rollback_result = None
+            session.rollback_recommended = False
+            session.state = "AWAITING_EXECUTION_APPROVAL"
+            session.warnings = self._unique(
+                [*session.warnings, *handoff.warnings, *dry_run.warnings, *diff_preview.warnings]
+            )
+            session.blockers = []
+            session.attempts.append(
+                self._make_attempt(
+                    attempt_number=session.current_attempt,
+                    state="AWAITING_EXECUTION_APPROVAL",
+                    parent_execution_id=retry_context["parent_execution_id"],
+                    parent_diff_review_id=retry_context["parent_diff_review_id"],
+                    diff_review_id=diff_preview.review_id,
+                    failure_context_hash=retry_context_hash,
+                    message="Improvement retry reviewed diff prepared.",
+                )
+            )
+            remaining = session.max_attempts - session.current_attempt
+            session.message = (
+                f"Attempt {session.current_attempt} prepared through reviewed diff. "
+                f"Explicit apply approval is required. Remaining retries after this attempt: {remaining}."
+            )
+        except Exception as exc:
+            session.state = previous_state
+            session.current_attempt = previous_attempt
+            session.blockers = [str(exc)]
+            session.message = "Retry preparation failed safely. No files were modified and no attempt was consumed."
         return self.task_store.update(session)
 
     def _ensure_state_guard(
@@ -221,3 +365,123 @@ class ControlledTaskExecutionService:
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _make_attempt(
+        self,
+        *,
+        attempt_number: int,
+        state: str,
+        diff_review_id: str | None = None,
+        parent_execution_id: str | None = None,
+        parent_diff_review_id: str | None = None,
+        mutation_execution_id: str | None = None,
+        verification_ids: list[str] | None = None,
+        quality_status: str | None = None,
+        failure_context_hash: str | None = None,
+        message: str = "",
+    ) -> TaskExecutionAttempt:
+        now = self._now()
+        return TaskExecutionAttempt(
+            attempt_number=attempt_number,
+            state=state,
+            parent_execution_id=parent_execution_id,
+            parent_diff_review_id=parent_diff_review_id,
+            diff_review_id=diff_review_id,
+            mutation_execution_id=mutation_execution_id,
+            verification_ids=[] if verification_ids is None else verification_ids,
+            quality_status=quality_status,
+            failure_context_hash=failure_context_hash,
+            created_at=now,
+            updated_at=now,
+            message=message,
+        )
+
+    def _update_current_attempt(
+        self,
+        session: TaskExecutionSession,
+        *,
+        state: str,
+        mutation_execution_id: str | None = None,
+        verification_ids: list[str] | None = None,
+        quality_status: str | None = None,
+        message: str = "",
+    ) -> None:
+        if not session.attempts:
+            return
+        attempt = session.attempts[-1]
+        if attempt.attempt_number != session.current_attempt:
+            return
+        attempt.state = state
+        attempt.updated_at = self._now()
+        attempt.message = message or attempt.message
+        if mutation_execution_id is not None:
+            attempt.mutation_execution_id = mutation_execution_id
+        if verification_ids:
+            attempt.verification_ids = self._unique([*attempt.verification_ids, *verification_ids])
+        if quality_status is not None:
+            attempt.quality_status = quality_status
+
+    def _ensure_latest_attempt_matches_active_diff(self, session: TaskExecutionSession) -> None:
+        if not session.attempts:
+            raise TaskExecutionBlockedError("Task attempt audit is missing.")
+        latest = session.attempts[-1]
+        if latest.attempt_number != session.current_attempt:
+            raise TaskExecutionBlockedError("Task attempt audit is inconsistent.")
+        if latest.diff_review_id != session.diff_review_id:
+            raise TaskExecutionBlockedError("Prepared diff is not the latest reviewed attempt.")
+
+    def _build_retry_context(self, session: TaskExecutionSession, quality) -> dict:
+        failed_results = [
+            {
+                "verification_type": result.verification_type,
+                "status": result.status,
+                "exit_code": result.exit_code,
+                "stdout_excerpt": result.stdout_excerpt,
+                "stderr_excerpt": result.stderr_excerpt,
+            }
+            for result in session.verification_results
+            if result.status in {"FAILED", "TIMED_OUT", "BLOCKED"}
+        ]
+        file_summaries = []
+        if session.apply_result:
+            file_summaries = [
+                {
+                    "relative_path": item.relative_path,
+                    "operation_type": item.operation_type,
+                    "original_content_hash": item.original_content_hash,
+                    "proposed_content_hash": item.proposed_content_hash,
+                }
+                for item in session.apply_result.file_results
+            ]
+        return {
+            "original_task_workflow_id": session.workflow_id,
+            "current_attempt": session.current_attempt,
+            "max_attempts": session.max_attempts,
+            "next_attempt": session.current_attempt + 1,
+            "parent_execution_id": session.mutation_execution_id,
+            "parent_diff_review_id": session.diff_review_id,
+            "failed_required_verifications": failed_results,
+            "quality_status": quality.quality_status,
+            "quality_reasons": quality.reasons,
+            "quality_blockers": quality.blockers,
+            "changed_files": file_summaries,
+            "previous_diff_summary": (
+                None
+                if session.dry_run is None
+                else session.dry_run.proposed_code_change_summary
+            ),
+        }
+
+    def _stable_hash(self, payload: dict) -> str:
+        serialized = json.dumps(payload, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def _unique(self, values: list[str]) -> list[str]:
+        seen = set()
+        output = []
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            output.append(value)
+        return output

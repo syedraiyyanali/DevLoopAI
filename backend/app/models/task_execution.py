@@ -20,6 +20,8 @@ TaskExecutionState = Literal[
     "QUALITY_PASSED",
     "QUALITY_FAILED",
     "QUALITY_INCOMPLETE",
+    "RETRY_PREPARING",
+    "RETRY_LIMIT_REACHED",
     "BLOCKED",
     "ROLLED_BACK",
     "FAILED",
@@ -39,6 +41,23 @@ class TaskExecutionActionRequest(BaseModel):
     expected_state: TaskExecutionState | None = None
 
 
+class TaskExecutionAttempt(BaseModel):
+    """Immutable-ish audit summary for one reviewed execution attempt."""
+
+    attempt_number: int = Field(..., ge=1)
+    state: TaskExecutionState
+    parent_execution_id: str | None = None
+    parent_diff_review_id: str | None = None
+    diff_review_id: str | None = None
+    mutation_execution_id: str | None = None
+    verification_ids: list[str] = Field(default_factory=list)
+    quality_status: str | None = None
+    failure_context_hash: str | None = None
+    created_at: str
+    updated_at: str
+    message: str = ""
+
+
 class TaskExecutionSession(BaseModel):
     """Persisted controlled single-task orchestration session."""
 
@@ -49,6 +68,9 @@ class TaskExecutionSession(BaseModel):
     state: TaskExecutionState
     created_at: str
     updated_at: str
+    current_attempt: int = 1
+    max_attempts: int = 3
+    attempts: list[TaskExecutionAttempt] = Field(default_factory=list)
     diff_review_id: str | None = None
     mutation_execution_id: str | None = None
     verification_ids: list[str] = Field(default_factory=list)
@@ -65,4 +87,3 @@ class TaskExecutionSession(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
     message: str
-

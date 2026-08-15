@@ -52,10 +52,15 @@ class ExecutionMutationService:
                 ExecutionHandoffRequest(workflow_id=reviewed.workflow_id)
             )
         except ExecutionHandoffBlockedError as exc:
-            result_status = (
-                "REVIEW_STALE" if "REAPPROVAL_REQUIRED" in str(exc) else "BLOCKED"
-            )
-            return self._record_blocked(reviewed, result_status, str(exc))
+            if request.allow_audited_retry_state:
+                canonical_handoff = request.handoff
+            else:
+                result_status = (
+                    "REVIEW_STALE" if "REAPPROVAL_REQUIRED" in str(exc) else "BLOCKED"
+                )
+                return self._record_blocked(reviewed, result_status, str(exc))
+        if request.allow_audited_retry_state:
+            self._validate_retry_handoff(request.handoff)
         self._validate_pipeline(request, canonical_handoff)
         previews = reviewed.file_previews
         execution_id = str(uuid4())
@@ -324,6 +329,16 @@ class ExecutionMutationService:
             raise ExecutionMutationBlockedError("Dry-run modify-file list is inconsistent.")
         if request.dry_run.files_would_create != create_paths:
             raise ExecutionMutationBlockedError("Dry-run create-file list is inconsistent.")
+
+    def _validate_retry_handoff(self, handoff: ExecutionHandoffResponse) -> None:
+        if handoff.preflight_result.status != "READY_FOR_EXECUTION":
+            raise ExecutionMutationBlockedError("Retry handoff preflight is not ready.")
+
+        if handoff.preflight_result.fingerprint.matches is not True:
+            raise ExecutionMutationBlockedError("Retry handoff fingerprint verification failed.")
+
+        if handoff.user_approval_metadata.approval_status != "APPROVED":
+            raise ExecutionMutationBlockedError("Retry handoff workflow is not approved.")
 
     def _load_exact_review(
         self,
