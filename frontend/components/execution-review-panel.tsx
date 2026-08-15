@@ -4,19 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  applyTaskExecution,
   applyReviewedChanges,
   createExecutionHandoff,
   getExecutionHistoryDetail,
   getExecutionQuality,
   getPlanningWorkflowHistory,
+  getTaskExecution,
   listExecutionVerifications,
   listExecutionHistory,
   listPlanningWorkflowHistory,
   rollbackExecution,
+  rollbackTaskExecution,
   runCoderDiffPreview,
   runCoderDryRun,
   runExecutionPreflight,
   runExecutionVerification,
+  prepareTaskExecution,
+  verifyTaskExecution,
   type CoderDiffPreviewResponse,
   type CoderDryRunResponse,
   type ExecutionApplyResponse,
@@ -29,6 +34,7 @@ import {
   type ExecutionVerificationResult,
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
+  type TaskExecutionSession,
 } from "../lib/api-client";
 
 type LoadingAction =
@@ -41,6 +47,10 @@ type LoadingAction =
   | "apply"
   | "verify"
   | "rollback"
+  | "task-prepare"
+  | "task-apply"
+  | "task-verify"
+  | "task-rollback"
   | null;
 
 const SERVER_ALLOWED_VERIFICATIONS = [
@@ -68,6 +78,8 @@ export default function ExecutionReviewPanel() {
     useState<ExecutionQualityResponse | null>(null);
   const [executionHistoryLoading, setExecutionHistoryLoading] = useState(false);
   const [executionHistoryError, setExecutionHistoryError] = useState("");
+  const [taskExecution, setTaskExecution] = useState<TaskExecutionSession | null>(null);
+  const [taskExecutionIdInput, setTaskExecutionIdInput] = useState("");
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
@@ -171,6 +183,98 @@ export default function ExecutionReviewPanel() {
     } finally {
       setExecutionHistoryLoading(false);
     }
+  }
+
+  async function prepareSelectedTask() {
+    if (!selectedWorkflow) {
+      return;
+    }
+
+    await runStep(
+      "task-prepare",
+      () => prepareTaskExecution(selectedWorkflow.workflow_id),
+      (result) => setTaskExecution(result),
+    );
+  }
+
+  async function loadTaskExecution() {
+    if (!taskExecutionIdInput.trim()) {
+      return;
+    }
+
+    await runStep(
+      "task-prepare",
+      () => getTaskExecution(taskExecutionIdInput.trim()),
+      (result) => setTaskExecution(result),
+    );
+  }
+
+  async function applyPreparedTask() {
+    if (!taskExecution) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Apply reviewed changes for task session ${taskExecution.task_execution_id}?\n\nThis will modify project files using the persisted reviewed diff.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await runStep(
+      "task-apply",
+      () => applyTaskExecution(taskExecution.task_execution_id, taskExecution.state),
+      (result) => {
+        setTaskExecution(result);
+        void loadExecutionHistory();
+        if (result.mutation_execution_id) {
+          void selectExecution(result.mutation_execution_id);
+        }
+      },
+    );
+  }
+
+  async function verifyAppliedTask() {
+    if (!taskExecution) {
+      return;
+    }
+
+    await runStep(
+      "task-verify",
+      () => verifyTaskExecution(taskExecution.task_execution_id, taskExecution.state),
+      (result) => {
+        setTaskExecution(result);
+        void loadExecutionHistory();
+        if (result.mutation_execution_id) {
+          void selectExecution(result.mutation_execution_id);
+        }
+      },
+    );
+  }
+
+  async function rollbackTask() {
+    if (!taskExecution) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Rollback task session ${taskExecution.task_execution_id}?\n\nRollback remains explicit and uses the persisted execution snapshot.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await runStep(
+      "task-rollback",
+      () => rollbackTaskExecution(taskExecution.task_execution_id, taskExecution.state),
+      (result) => {
+        setTaskExecution(result);
+        void loadExecutionHistory();
+        if (result.mutation_execution_id) {
+          void selectExecution(result.mutation_execution_id);
+        }
+      },
+    );
   }
 
   async function selectWorkflow(workflowId: string) {
@@ -507,6 +611,22 @@ export default function ExecutionReviewPanel() {
         </div>
       </div>
 
+      <ControlledTaskSection
+        isApplying={loadingAction === "task-apply"}
+        isPreparing={loadingAction === "task-prepare"}
+        isRollingBack={loadingAction === "task-rollback"}
+        isVerifying={loadingAction === "task-verify"}
+        onApply={() => void applyPreparedTask()}
+        onLoad={() => void loadTaskExecution()}
+        onPrepare={() => void prepareSelectedTask()}
+        onRollback={() => void rollbackTask()}
+        onTaskIdChange={setTaskExecutionIdInput}
+        onVerify={() => void verifyAppliedTask()}
+        selectedWorkflow={selectedWorkflow}
+        taskExecution={taskExecution}
+        taskExecutionIdInput={taskExecutionIdInput}
+      />
+
       <ExecutionHistorySection
         error={executionHistoryError}
         executions={executions}
@@ -517,6 +637,145 @@ export default function ExecutionReviewPanel() {
         selectedExecution={selectedExecution}
       />
     </section>
+  );
+}
+
+function ControlledTaskSection({
+  isApplying,
+  isPreparing,
+  isRollingBack,
+  isVerifying,
+  onApply,
+  onLoad,
+  onPrepare,
+  onRollback,
+  onTaskIdChange,
+  onVerify,
+  selectedWorkflow,
+  taskExecution,
+  taskExecutionIdInput,
+}: {
+  isApplying: boolean;
+  isPreparing: boolean;
+  isRollingBack: boolean;
+  isVerifying: boolean;
+  onApply: () => void;
+  onLoad: () => void;
+  onPrepare: () => void;
+  onRollback: () => void;
+  onTaskIdChange: (value: string) => void;
+  onVerify: () => void;
+  selectedWorkflow: PlanningWorkflowHistoryRecord | null;
+  taskExecution: TaskExecutionSession | null;
+  taskExecutionIdInput: string;
+}) {
+  const canPrepare = selectedWorkflow?.approval_status === "APPROVED" && !isPreparing;
+  const canApply = taskExecution?.state === "AWAITING_EXECUTION_APPROVAL" && !isApplying;
+  const canVerify =
+    ["APPLIED", "QUALITY_FAILED", "QUALITY_INCOMPLETE"].includes(taskExecution?.state ?? "") &&
+    !isVerifying;
+  const canRollback =
+    Boolean(taskExecution?.mutation_execution_id) &&
+    taskExecution?.state !== "ROLLED_BACK" &&
+    !isRollingBack;
+
+  return (
+    <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-zinc-950">Controlled Single-Task Execution</p>
+        <p className="text-sm leading-6 text-zinc-600">
+          Prepare reviewed diffs, explicitly apply, verify required checks, and evaluate the Quality Gate.
+          Planning approval alone never applies files.
+        </p>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-5">
+        {["Prepare", "Review Diff", "Apply", "Verify", "Quality"].map((label) => (
+          <div key={label} className="rounded-md border border-zinc-200 bg-white px-3 py-2">
+            <p className="font-medium text-zinc-900">{label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-col gap-3 lg:flex-row">
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          disabled={!canPrepare}
+          type="button"
+          onClick={onPrepare}
+        >
+          {isPreparing ? "Preparing..." : "Prepare selected workflow"}
+        </button>
+        <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+          <input
+            className="h-10 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-950"
+            placeholder="Task execution ID"
+            value={taskExecutionIdInput}
+            onChange={(event) => onTaskIdChange(event.target.value)}
+          />
+          <button
+            className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+            disabled={!taskExecutionIdInput.trim() || isPreparing}
+            type="button"
+            onClick={onLoad}
+          >
+            Load task
+          </button>
+        </div>
+      </div>
+
+      {taskExecution ? (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-700">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="break-all font-semibold text-zinc-950">
+                {taskExecution.task_execution_id}
+              </p>
+              <p className="break-all text-xs text-zinc-500">
+                Workflow: {taskExecution.workflow_id}
+              </p>
+            </div>
+            <StatusBadge value={taskExecution.state} />
+          </div>
+          <p className="mt-3">{taskExecution.message}</p>
+          <ListBlock label="Warnings" values={taskExecution.warnings} />
+          <ListBlock label="Blockers" values={taskExecution.blockers} />
+          {taskExecution.diff_preview ? (
+            <DiffPreviewCard diffPreview={taskExecution.diff_preview} />
+          ) : null}
+          {taskExecution.apply_result ? (
+            <ExecutionResultCard execution={taskExecution.apply_result} />
+          ) : null}
+          {taskExecution.quality_result ? (
+            <QualityGateCard quality={taskExecution.quality_result} />
+          ) : null}
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <button
+              className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-amber-600 px-4 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              disabled={!canApply}
+              type="button"
+              onClick={onApply}
+            >
+              {isApplying ? "Applying..." : "Apply reviewed task"}
+            </button>
+            <button
+              className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              disabled={!canVerify}
+              type="button"
+              onClick={onVerify}
+            >
+              {isVerifying ? "Verifying..." : "Run required verification"}
+            </button>
+            <button
+              className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-red-700 px-4 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+              disabled={!canRollback}
+              type="button"
+              onClick={onRollback}
+            >
+              {isRollingBack ? "Rolling back..." : "Rollback task"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

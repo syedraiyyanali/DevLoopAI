@@ -40,7 +40,7 @@ class ExecutionQualityGate:
         execution = self.execution_store.get_execution(execution_id)
         audit = self.execution_store.get_execution_audit(execution_id)
         verifications = self.execution_store.list_verifications(execution_id)
-        required = self._required_verifications(execution)
+        required = self.required_verifications(execution)
         blockers = self._audit_blockers(execution, audit)
         warnings = []
         reasons = []
@@ -135,7 +135,8 @@ class ExecutionQualityGate:
             reasons=["all_required_verification_passed"],
         )
 
-    def _required_verifications(self, execution) -> list[str]:
+    def required_verifications(self, execution) -> list[str]:
+        """Return deterministic allowlisted checks required for this execution."""
         root = Path(execution.workspace_path).resolve()
         changed_paths = [Path(result.relative_path) for result in execution.file_results]
         required = []

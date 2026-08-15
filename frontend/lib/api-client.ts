@@ -506,6 +506,46 @@ export interface ExecutionQualityResponse {
   quality_timestamp: string;
 }
 
+export type TaskExecutionState =
+  | "PREPARING"
+  | "READY_FOR_REVIEW"
+  | "AWAITING_EXECUTION_APPROVAL"
+  | "APPLYING"
+  | "APPLIED"
+  | "VERIFYING"
+  | "QUALITY_PASSED"
+  | "QUALITY_FAILED"
+  | "QUALITY_INCOMPLETE"
+  | "BLOCKED"
+  | "ROLLED_BACK"
+  | "FAILED";
+
+export interface TaskExecutionSession {
+  task_execution_id: string;
+  workflow_id: string;
+  plan_fingerprint: string | null;
+  workspace_path: string | null;
+  state: TaskExecutionState;
+  created_at: string;
+  updated_at: string;
+  diff_review_id: string | null;
+  mutation_execution_id: string | null;
+  verification_ids: string[];
+  rollback_status: string | null;
+  rollback_recommended: boolean;
+  preflight: ExecutionPreflightResponse | null;
+  handoff: ExecutionHandoffResponse | null;
+  dry_run: CoderDryRunResponse | null;
+  diff_preview: CoderDiffPreviewResponse | null;
+  apply_result: ExecutionApplyResponse | null;
+  verification_results: ExecutionVerificationResult[];
+  quality_result: ExecutionQualityResponse | null;
+  rollback_result: ExecutionRollbackResponse | null;
+  warnings: string[];
+  blockers: string[];
+  message: string;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -941,6 +981,68 @@ export async function getExecutionQuality(
 ): Promise<ExecutionQualityResponse> {
   return requestJson<ExecutionQualityResponse>(
     `/workflows/execution/${encodeURIComponent(executionId)}/quality`,
+  );
+}
+
+export async function prepareTaskExecution(
+  workflowId: string,
+): Promise<TaskExecutionSession> {
+  return requestJson<TaskExecutionSession>("/workflows/execution/task", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workflow_id: workflowId,
+    }),
+  });
+}
+
+export async function getTaskExecution(
+  taskExecutionId: string,
+): Promise<TaskExecutionSession> {
+  return requestJson<TaskExecutionSession>(
+    `/workflows/execution/task/${encodeURIComponent(taskExecutionId)}`,
+  );
+}
+
+export async function applyTaskExecution(
+  taskExecutionId: string,
+  expectedState?: TaskExecutionState,
+): Promise<TaskExecutionSession> {
+  return taskExecutionAction(taskExecutionId, "apply", expectedState);
+}
+
+export async function verifyTaskExecution(
+  taskExecutionId: string,
+  expectedState?: TaskExecutionState,
+): Promise<TaskExecutionSession> {
+  return taskExecutionAction(taskExecutionId, "verify", expectedState);
+}
+
+export async function rollbackTaskExecution(
+  taskExecutionId: string,
+  expectedState?: TaskExecutionState,
+): Promise<TaskExecutionSession> {
+  return taskExecutionAction(taskExecutionId, "rollback", expectedState);
+}
+
+function taskExecutionAction(
+  taskExecutionId: string,
+  action: "apply" | "verify" | "rollback",
+  expectedState?: TaskExecutionState,
+): Promise<TaskExecutionSession> {
+  return requestJson<TaskExecutionSession>(
+    `/workflows/execution/task/${encodeURIComponent(taskExecutionId)}/${action}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        expected_state: expectedState ?? null,
+      }),
+    },
   );
 }
 

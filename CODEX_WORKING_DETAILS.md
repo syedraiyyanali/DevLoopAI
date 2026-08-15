@@ -3,33 +3,33 @@
 ## Last Updated
 
 Date: 2026-08-15
-Time: 10:12:00 +05:00
+Time: 10:18:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 32 deterministic execution quality gate
-Working Tree: clean after Step 32 feature commit
-Last Push: Step 32 checkpoint pushed to origin/main
+Latest Commit: Step 33 controlled single-task execution workflow
+Working Tree: clean after Step 33 feature commit
+Last Push: Step 33 checkpoint pushed to origin/main
 
 ## Current Sprint
 
-Sprint: Sprint 1 - Execution Quality Gate
+Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 32: Deterministic Execution Quality Gate
+Step: Sprint 1 - Step 33: Controlled Single-Task Execution Workflow
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 32 deterministic execution quality gate completed, verified, committed, and pushed.
+Step 33 controlled single-task execution workflow completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 32 checkpoint when the next task is requested.
+Continue from the verified Step 33 checkpoint when the next task is requested.
 
 ## What Has Been Completed
 
@@ -658,6 +658,31 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 32 disposable scenario B: PASS; syntax-error mutation + `python_compile` failed -> `QUALITY_FAILED`, rollback recommended, explicit rollback -> `ROLLED_BACK`.
 - Step 32 disposable scenario C: PASS; valid mutation with no required verification -> `QUALITY_INCOMPLETE` with missing `python_compile`.
 - Step 32 disposable scenario D: PASS; valid mutation + passing verification initially -> `QUALITY_PASSED`, then manual file alteration -> `BLOCKED`.
+- Added persisted controlled single-task execution sessions with states: `PREPARING`, `AWAITING_EXECUTION_APPROVAL`, `APPLYING`, `APPLIED`, `VERIFYING`, `QUALITY_PASSED`, `QUALITY_FAILED`, `QUALITY_INCOMPLETE`, `BLOCKED`, `ROLLED_BACK`, and `FAILED`.
+- Added controlled task APIs:
+  - `POST /api/v1/workflows/execution/task`
+  - `GET /api/v1/workflows/execution/task/{task_execution_id}`
+  - `POST /api/v1/workflows/execution/task/{task_execution_id}/apply`
+  - `POST /api/v1/workflows/execution/task/{task_execution_id}/verify`
+  - `POST /api/v1/workflows/execution/task/{task_execution_id}/rollback`
+- Preparation coordinates existing preflight, canonical handoff, coder dry-run, and diff preview, then stops at `AWAITING_EXECUTION_APPROVAL` with no mutation.
+- Apply remains a separate explicit action after reviewed diff preparation; planning workflow approval alone never applies files.
+- Apply reuses `ExecutionMutationService`; it does not call Ollama and does not bypass handoff/diff/current-state safety checks.
+- Verification uses the existing allowlisted `ExecutionVerificationRunner` and required checks from `ExecutionQualityGate.required_verifications`.
+- Quality uses the existing deterministic `ExecutionQualityGate`; no Ollama/model reasoning is used for final outcome.
+- Rollback remains explicit and reuses existing snapshot rollback behavior.
+- Task sessions persist workflow ID, plan fingerprint, workspace path, diff review ID, mutation execution ID, verification IDs, quality result, rollback result/status, timestamps, warnings, and blockers.
+- Task actions accept an optional expected-state guard; duplicate apply and wrong-state actions are blocked by the backend.
+- Frontend Execution Review panel now includes a compact Controlled Single-Task Execution section for prepare, reload by task ID, explicit apply, required verification, quality result, and optional rollback.
+- Step 33 focused task execution tests: PASS, `9 passed`.
+- Step 33 Python compile check: PASS.
+- Step 33 full backend pytest: PASS, `193 passed`.
+- Step 33 frontend ESLint: PASS.
+- Step 33 frontend production build: PASS.
+- Step 33 route render smoke check: PASS; Next.js route contains Controlled Single-Task Execution, Prepare selected workflow, explicit approval-boundary copy, and Execution History.
+- Step 33 disposable scenario A: PASS; prepare did not mutate file, explicit apply changed file, required verification passed, Quality Gate returned `QUALITY_PASSED`, and task session reloaded from persistence.
+- Step 33 disposable scenario B: PASS; syntax-breaking change applied explicitly, verification failed, Quality Gate returned `QUALITY_FAILED`, rollback was recommended, explicit rollback returned `ROLLED_BACK`, and original file content was restored.
+- Step 33 disposable scenario C: PASS; prepared reviewed diff became stale after manual file change before apply, apply returned `BLOCKED`, and the newer file content was not overwritten.
 
 ## Known Problems
 
@@ -676,6 +701,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 30 frontend controls are verified, committed, and pushed.
 - Step 31 persisted execution history UI is verified, committed, and pushed.
 - Step 32 deterministic execution quality gate is verified, committed, and pushed.
+- Step 33 controlled single-task execution workflow is verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -735,6 +761,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 reloads execution history independently from in-memory apply/diff state, so prior executions can be inspected after refresh.
 - Step 32 centralizes deterministic final execution outcome rules before any future single-task execution workflow.
 - Step 32 prevents stale verified states from remaining quality-passed after affected files change.
+- Step 33 preserves the approval boundary between reviewed plan approval and explicit mutation approval after exact diff review.
+- Step 33 reuses existing safety services instead of duplicating approval, preflight, handoff, mutation, verification, quality, or rollback logic.
 
 ## Git Commits From Recent Work
 
@@ -751,6 +779,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 30 - feat: add frontend execution controls
 - Step 31 - feat: add persisted execution history UI
 - Step 32 - feat: add deterministic execution quality gate
+- Step 33 - feat: add controlled task execution workflow
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -777,13 +806,18 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - `backend/app/api/v1/endpoints/execution_history.py`
 - `backend/app/api/v1/endpoints/execution_quality.py`
+- `backend/app/api/v1/endpoints/task_execution.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/models/execution_history.py`
 - `backend/app/models/execution_quality.py`
+- `backend/app/models/task_execution.py`
 - `backend/app/services/execution_quality.py`
+- `backend/app/services/task_execution.py`
+- `backend/app/services/task_execution_store.py`
 - `backend/app/services/execution_store.py`
 - `backend/tests/test_execution_history_api.py`
 - `backend/tests/test_execution_quality_api.py`
+- `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
@@ -798,14 +832,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 33 - Controlled Single-Task Execution Workflow.
+Recommended next task: Sprint 1 Step 34 - Bounded Improve-and-Retry Loop.
 
 ## Next Files Likely to Change
 
-- orchestration endpoint/UI for one approved workflow through preflight, handoff, dry-run, diff, explicit apply, explicit verify, and quality gate
-- preserve explicit user controls and avoid autonomous retry loops
-- reuse persisted execution history and quality gate
-- keep rollback explicit
+- new revision proposal after failed quality
+- bounded retry count
+- every retry must create a new reviewed diff and require explicit apply approval
+- preserve current single-task execution state machine and audit trail
 
 ## Do Not Forget
 

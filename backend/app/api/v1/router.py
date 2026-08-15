@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     planning_workflow,
     reviewer,
     system,
+    task_execution,
     validator,
     workspace,
 )
@@ -67,6 +68,11 @@ api_router.include_router(
 
 api_router.include_router(
     execution_preflight.router,
+    tags=["Workflows"],
+)
+
+api_router.include_router(
+    task_execution.router,
     tags=["Workflows"],
 )
 
