@@ -6,6 +6,7 @@ import {
   ApiError,
   applyTaskExecution,
   applyReviewedChanges,
+  commitVerifiedExecution,
   continueAutonomousTask,
   createExecutionHandoff,
   getAutonomousTask,
@@ -39,6 +40,7 @@ import {
   type ExecutionRollbackResponse,
   type ExecutionVerificationResult,
   type GitStatusResponse,
+  type GitCommitResponse,
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
   type TaskExecutionSession,
@@ -63,6 +65,7 @@ type LoadingAction =
   | "autonomous-continue"
   | "autonomous-load"
   | "git-status"
+  | "git-commit"
   | null;
 
 const SERVER_ALLOWED_VERIFICATIONS = [
@@ -97,6 +100,8 @@ export default function ExecutionReviewPanel() {
   const [autonomousWorkspacePath, setAutonomousWorkspacePath] = useState("");
   const [autonomousSessionIdInput, setAutonomousSessionIdInput] = useState("");
   const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
+  const [gitCommit, setGitCommit] = useState<GitCommitResponse | null>(null);
+  const [gitCommitMessage, setGitCommitMessage] = useState("");
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
@@ -368,6 +373,30 @@ export default function ExecutionReviewPanel() {
       "git-status",
       () => getGitStatus(workspacePath, selectedExecution?.execution_id ?? taskExecution?.mutation_execution_id),
       (result) => setGitStatus(result),
+    );
+  }
+
+  async function commitSelectedExecution() {
+    const executionId = selectedExecution?.execution_id ?? taskExecution?.mutation_execution_id;
+    if (!executionId) {
+      setError("Select a quality-passed execution before committing.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Commit verified changes for execution ${executionId}?\n\nOnly audited execution paths will be staged. This will not push.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await runStep(
+      "git-commit",
+      () => commitVerifiedExecution(executionId, gitCommitMessage),
+      (result) => {
+        setGitCommit(result);
+        void loadGitStatus();
+      },
     );
   }
 
@@ -722,8 +751,13 @@ export default function ExecutionReviewPanel() {
       />
 
       <GitStatusSection
+        commitMessage={gitCommitMessage}
+        gitCommit={gitCommit}
         gitStatus={gitStatus}
+        isCommitting={loadingAction === "git-commit"}
         isLoading={loadingAction === "git-status"}
+        onCommit={() => void commitSelectedExecution()}
+        onCommitMessageChange={setGitCommitMessage}
         onRefresh={() => void loadGitStatus()}
       />
 
@@ -900,14 +934,30 @@ function AutonomousTaskSection({
 }
 
 function GitStatusSection({
+  commitMessage,
+  gitCommit,
   gitStatus,
+  isCommitting,
   isLoading,
+  onCommit,
+  onCommitMessageChange,
   onRefresh,
 }: {
+  commitMessage: string;
+  gitCommit: GitCommitResponse | null;
   gitStatus: GitStatusResponse | null;
+  isCommitting: boolean;
   isLoading: boolean;
+  onCommit: () => void;
+  onCommitMessageChange: (value: string) => void;
   onRefresh: () => void;
 }) {
+  const canCommit =
+    Boolean(gitStatus?.execution_id) &&
+    Boolean(gitStatus?.is_git_repository) &&
+    gitStatus?.unexpected_changed_files.length === 0 &&
+    !isCommitting;
+
   return (
     <div className="mt-5 rounded-md border border-zinc-200 bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -924,6 +974,22 @@ function GitStatusSection({
           onClick={onRefresh}
         >
           {isLoading ? "Reading..." : "Read Git status"}
+        </button>
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          className="h-10 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-950"
+          placeholder="Optional conventional commit message"
+          value={commitMessage}
+          onChange={(event) => onCommitMessageChange(event.target.value)}
+        />
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          disabled={!canCommit}
+          type="button"
+          onClick={onCommit}
+        >
+          {isCommitting ? "Committing..." : "Commit verified changes"}
         </button>
       </div>
       {gitStatus ? (
@@ -956,6 +1022,22 @@ function GitStatusSection({
               {gitStatus.diff_truncated ? "\n\n[diff truncated]" : ""}
             </pre>
           ) : null}
+        </div>
+      ) : null}
+      {gitCommit ? (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="break-all font-semibold text-zinc-950">
+              Commit audit: {gitCommit.commit_audit_id}
+            </p>
+            <StatusBadge value={gitCommit.status} />
+          </div>
+          <HashRow label="Commit" value={gitCommit.commit_hash ?? "Not committed"} />
+          <HashRow label="Message" value={gitCommit.message} />
+          <HashRow label="Timestamp" value={formatDate(gitCommit.timestamp)} />
+          <ListBlock label="Files committed" values={gitCommit.files_committed} />
+          <ListBlock label="Warnings" values={gitCommit.warnings} />
+          <ListBlock label="Blockers" values={gitCommit.blockers} />
         </div>
       ) : null}
     </div>

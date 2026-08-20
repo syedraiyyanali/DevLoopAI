@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 38 safe Git diff/status integration
-Working Tree: clean after Step 38 feature commit
-Last Push: Step 38 checkpoint pushed to origin/main
+Latest Commit: Step 39 controlled Git commit workflow
+Working Tree: clean after Step 39 feature commit
+Last Push: Step 39 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 38: Safe Git Diff and Status Integration
+Step: Sprint 1 - Step 39: Controlled Git Commit Workflow
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 38 safe Git diff/status integration completed, verified, committed, and pushed.
+Step 39 controlled Git commit workflow completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 38 checkpoint with Sprint 1 Step 39.
+Continue from the verified Step 39 checkpoint with Sprint 1 Step 40.
 
 ## What Has Been Completed
 
@@ -773,6 +773,22 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 38 frontend production build: PASS.
 - Step 38 route render smoke check: PASS; Next.js production route returned HTTP 200.
 - Step 38 disposable Git verification: PASS via tests; temporary repo status reported modified/untracked files and bounded diff, non-Git workspace returned a safe warning, and execution-audit comparison identified unexpected changed files.
+- Added explicit controlled local Git commit API:
+  - `POST /api/v1/workflows/git/commit`
+- Controlled commit preconditions require a valid execution record, deterministic Quality Gate `QUALITY_PASSED`, non-rolled-back current execution state, Git repository workspace, audited changed files, and no unexpected changed files outside the execution audit.
+- Controlled commit stages only exact audited execution paths with `git add -- <audited paths>`. It never uses `git add .`.
+- Controlled commit uses fixed Git command argument arrays with `shell=False`; no arbitrary command strings are accepted.
+- Controlled commit supports local `git commit -m <sanitized message>` only. It does not push, force push, reset, clean, checkout, merge, rebase, stash, install dependencies, or deploy.
+- Commit messages are sanitized to a single line with a deterministic fallback.
+- Added SQLite-backed commit audit records containing commit audit ID, execution ID, workflow ID, workspace path, status, commit hash, message, committed files, timestamp, warnings, and blockers.
+- Frontend Read-Only Git Status card now includes explicit `Commit verified changes`, optional commit message input, confirmation prompt, and commit audit result display.
+- Step 39 focused Git commit/status tests: PASS, `8 passed`.
+- Step 39 Python compile check: PASS.
+- Step 39 full backend pytest: PASS, `229 passed`.
+- Step 39 frontend ESLint: PASS.
+- Step 39 frontend production build: PASS.
+- Step 39 route render smoke check: PASS; Next.js production route returned HTTP 200.
+- Step 39 disposable Git verification: PASS via tests; quality-passed execution committed only `sample.py`, incomplete quality blocked commit, unrelated changed files blocked commit, and multiline commit message was sanitized.
 
 ## Known Problems
 
@@ -796,7 +812,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
 - Step 36 multi-file context selection is verified locally and ready to commit/push.
 - Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
-- Step 38 safe Git diff/status integration is verified locally and ready to commit/push.
+- Step 38 safe Git diff/status integration is verified, committed, and pushed.
+- Step 39 controlled Git commit workflow is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -864,6 +881,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 36 fixed a deterministic test fixture mismatch: adding a second TypeScript fixture file required updating the planner context language count from 1 to 2, because preflight correctly detected the project-context change.
 - Step 37 changed expected Ollama-unavailable API error messages to include the deterministic classification prefix `MODEL_UNAVAILABLE`.
 - Step 38 adds only read-only Git operations. Controlled commit remains unavailable until Step 39.
+- Step 39 fixture work exposed that Quality Gate requires persisted per-file execution audit rows as well as response JSON; tests now record both, matching real mutation behavior.
 
 ## Git Commits From Recent Work
 
@@ -885,7 +903,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - bb901a0 - feat: add bounded autonomous task mode
 - 6fc9afe - feat: add bounded coding context selection
 - 05cdb1f - feat: add model structured-output reliability
-- Step 38 - pending commit: feat: add read-only git status integration
+- c9a5053 - feat: add read-only git status integration
+- Step 39 - pending commit: feat: add controlled git commit workflow
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -913,6 +932,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/api/v1/endpoints/task_execution.py`
 - `backend/app/api/v1/endpoints/autonomous_task.py`
 - `backend/app/api/v1/endpoints/coder.py`
+- `backend/app/api/v1/endpoints/git_commit.py`
 - `backend/app/api/v1/endpoints/git_status.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/agents/coder.py`
@@ -920,11 +940,13 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/models/context_selection.py`
 - `backend/app/models/coder.py`
 - `backend/app/models/execution_mutation.py`
+- `backend/app/models/git_commit.py`
 - `backend/app/models/task_execution.py`
 - `backend/app/services/autonomous_task.py`
 - `backend/app/services/autonomous_task_store.py`
 - `backend/app/services/context_selection.py`
 - `backend/app/services/model_reliability.py`
+- `backend/app/services/git_commit.py`
 - `backend/app/services/git_status.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
@@ -932,6 +954,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/tests/test_context_selection.py`
 - `backend/tests/test_coder_dry_run_api.py`
 - `backend/tests/test_model_reliability.py`
+- `backend/tests/test_git_commit_api.py`
 - `backend/tests/test_git_status_api.py`
 - `backend/tests/test_planner_api.py`
 - `backend/tests/test_reviewer_api.py`
@@ -951,14 +974,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 39 - Controlled Git Commit Workflow.
+Recommended next task: Sprint 1 Step 40 - Better Test Selection and Validation Strategy.
 
 ## Next Files Likely to Change
 
-- explicit controlled local Git commit workflow
-- stage only audited approved paths, never `git add .`
-- require quality-passed execution and no unsafe/unapproved files
-- persist commit audit metadata
+- deterministic verification planning tiers
+- select the smallest meaningful allowlisted checks for changed files
+- record verification selection reasons for audit/history
+- update Quality Gate policy to understand improved verification requirements
 
 ## Do Not Forget
 
@@ -973,4 +996,3 @@ Recommended next task: Sprint 1 Step 39 - Controlled Git Commit Workflow.
 ## Resume Instructions
 
 On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace, project-context, Planner Agent, Reviewer Agent, Validator Agent, and Planning Workflow foundation.
-- `backend/app/models/git_status.py`

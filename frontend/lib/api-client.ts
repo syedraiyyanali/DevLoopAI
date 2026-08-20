@@ -513,6 +513,20 @@ export interface GitStatusResponse {
   blockers: string[];
 }
 
+export interface GitCommitResponse {
+  commit_audit_id: string;
+  execution_id: string;
+  workflow_id: string | null;
+  workspace_path: string | null;
+  status: "COMMITTED" | "BLOCKED" | "FAILED";
+  commit_hash: string | null;
+  message: string;
+  files_committed: string[];
+  timestamp: string;
+  warnings: string[];
+  blockers: string[];
+}
+
 export interface ExecutionHistoryFile {
   relative_path: string;
   operation_type: string;
@@ -1147,6 +1161,22 @@ export async function getGitStatus(
     body: JSON.stringify({
       workspace_path: workspacePath,
       execution_id: executionId ?? null,
+    }),
+  });
+}
+
+export async function commitVerifiedExecution(
+  executionId: string,
+  message?: string,
+): Promise<GitCommitResponse> {
+  return requestJson<GitCommitResponse>("/workflows/git/commit", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      execution_id: executionId,
+      message: message?.trim() || null,
     }),
   });
 }
