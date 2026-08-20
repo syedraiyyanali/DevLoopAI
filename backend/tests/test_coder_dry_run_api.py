@@ -387,7 +387,9 @@ def test_coder_dry_run_maps_ollama_unavailable(tmp_path, dry_run_context):
     response = post_dry_run(handoff)
 
     assert response.status_code == 502
-    assert response.json()["error"]["message"] == "Unable to connect to Ollama"
+    assert response.json()["error"]["message"] == (
+        "MODEL_UNAVAILABLE: Unable to connect to Ollama"
+    )
 
 
 def test_coder_dry_run_blocks_invalid_workflow_id(tmp_path, dry_run_context):

@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 36 multi-file context selection
-Working Tree: clean after Step 36 feature commit
-Last Push: Step 36 checkpoint pushed to origin/main
+Latest Commit: Step 37 model reliability and structured-output recovery
+Working Tree: clean after Step 37 feature commit
+Last Push: Step 37 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 36: Multi-File Coding Improvements and Better Context Selection
+Step: Sprint 1 - Step 37: Model Reliability and Structured-Output Recovery
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 36 multi-file coding improvements and context selection completed, verified, committed, and pushed.
+Step 37 model reliability and structured-output recovery completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 36 checkpoint with Sprint 1 Step 37.
+Continue from the verified Step 37 checkpoint with Sprint 1 Step 38.
 
 ## What Has Been Completed
 
@@ -744,6 +744,20 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 36 route render smoke check: PASS; Next.js production route returned HTTP 200.
 - Step 36 multi-file coverage: PASS; approved two-file handoff returned a two-file dry-run and selected both approved files as context.
 - Step 36 safety coverage: PASS; context tests exclude `.env` and `node_modules`, enforce file count limits, and truncate oversized context content.
+- Added centralized `StructuredOutputParser` and `ModelAttemptMetadata` in `backend/app/services/model_reliability.py`.
+- The reliability parser extracts a single JSON object, validates strict Pydantic schemas, and performs only explicit harmless enum normalizations.
+- Supported enum normalizations include reviewer approval values such as `approve with changes` -> `APPROVE_WITH_CHANGES` and validator status values such as `ready with warnings` -> `READY_WITH_WARNINGS`.
+- Malformed or unrepairable structured output still fails safely; no broad arbitrary JSON repair was added.
+- Added Ollama error classification: `MODEL_RESOURCE_EXHAUSTED`, `MODEL_UNAVAILABLE`, `MODEL_TIMEOUT`, and `MODEL_ERROR`.
+- Planner, Reviewer, Validator, Coder dry-run, and Coder diff-preview now use shared structured-output parsing/classification paths while preserving their existing schema-specific validation and narrow coder operation-alias normalization.
+- Temporary Ollama/model failures are surfaced as classified `502` errors and do not mutate files, consume mutation approval, rollback, install dependencies, run commands, or weaken validation.
+- Step 37 focused reliability/planner/reviewer/validator tests: PASS, `27 passed`.
+- Step 37 focused coder reliability tests: PASS, `20 passed`.
+- Step 37 Python compile check: PASS.
+- Step 37 full backend pytest: PASS, `221 passed`.
+- Step 37 frontend ESLint: PASS.
+- Step 37 frontend production build: PASS.
+- Step 37 route render smoke check: PASS on rerun; initial parallel smoke timed out while the frontend build was still running, rerun returned HTTP 200.
 
 ## Known Problems
 
@@ -766,6 +780,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 34 bounded improve-and-retry loop is verified, committed, and pushed.
 - Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
 - Step 36 multi-file context selection is verified locally and ready to commit/push.
+- Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -831,6 +846,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 34 fixed the retry/preflight interaction by making retry evaluate the current failed execution audit instead of requiring the original pre-mutation project preflight to still match after an intentional failed mutation.
 - Step 35 adds safe autonomous coordination without adding hidden mutation, hidden rollback, generic shell execution, dependency installation, Git operations, deployment, or autonomous mutation approval.
 - Step 36 fixed a deterministic test fixture mismatch: adding a second TypeScript fixture file required updating the planner context language count from 1 to 2, because preflight correctly detected the project-context change.
+- Step 37 changed expected Ollama-unavailable API error messages to include the deterministic classification prefix `MODEL_UNAVAILABLE`.
 
 ## Git Commits From Recent Work
 
@@ -850,7 +866,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 33 - feat: add controlled task execution workflow
 - 37517e0 - feat: add bounded task retry workflow
 - bb901a0 - feat: add bounded autonomous task mode
-- Step 36 - pending commit: feat: add bounded coding context selection
+- 6fc9afe - feat: add bounded coding context selection
+- Step 37 - pending commit: feat: add model structured-output reliability
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -888,11 +905,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/services/autonomous_task.py`
 - `backend/app/services/autonomous_task_store.py`
 - `backend/app/services/context_selection.py`
+- `backend/app/services/model_reliability.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
 - `backend/tests/test_autonomous_task_api.py`
 - `backend/tests/test_context_selection.py`
 - `backend/tests/test_coder_dry_run_api.py`
+- `backend/tests/test_model_reliability.py`
+- `backend/tests/test_planner_api.py`
+- `backend/tests/test_reviewer_api.py`
+- `backend/tests/test_validator_api.py`
 - `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
@@ -908,14 +930,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 37 - Model Reliability and Structured-Output Recovery.
+Recommended next task: Sprint 1 Step 38 - Safe Git Diff and Status Integration.
 
 ## Next Files Likely to Change
 
-- central model reliability/structured-output handling
-- bounded regeneration attempts
-- model unavailable/CUDA classification
-- safe metadata logging without secrets or giant raw outputs
+- read-only Git status/diff service
+- fixed subprocess argument arrays only
+- execution-audit comparison for unexpected Git changes
+- compact frontend Git status/diff display if useful
 
 ## Do Not Forget
 

@@ -1,5 +1,4 @@
 import json
-import re
 import difflib
 from pathlib import Path
 
@@ -23,6 +22,7 @@ from app.services.execution_handoff import (
 from app.models.context_selection import ContextSelectionRequest
 from app.services.context_selection import ContextSelectionService
 from app.services.execution_store import ExecutionStore
+from app.services.model_reliability import StructuredOutputError, StructuredOutputParser
 from app.services.ollama import OllamaService, OllamaServiceError
 from app.services.workspace import (
     WorkspaceAccessError,
@@ -63,6 +63,7 @@ class CoderDryRunAgent:
             if workspace_service is not None
             else None
         )
+        self.output_parser = StructuredOutputParser()
 
     async def dry_run(self, request: CoderDryRunRequest) -> CoderDryRunResponse:
         """
@@ -94,7 +95,8 @@ class CoderDryRunAgent:
                 )
             )
         except OllamaServiceError as exc:
-            raise CoderDryRunError(str(exc)) from exc
+            classification = self.output_parser.classify_ollama_error(exc)
+            raise CoderDryRunError(f"{classification}: {exc}") from exc
 
         model_payload = self._parse_model_payload(model_response.message)
         self._validate_model_payload(
@@ -345,15 +347,10 @@ class CoderDryRunAgent:
         return normalized_operation
 
     def _extract_json_object(self, raw_response: str):
-        match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
-
-        if match is None:
-            raise CoderDryRunError("Coder dry-run model did not return valid JSON")
-
         try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise CoderDryRunError("Coder dry-run model did not return valid JSON") from exc
+            return self.output_parser._extract_json_object(raw_response, "Coder dry-run")
+        except StructuredOutputError as exc:
+            raise CoderDryRunError(str(exc)) from exc
 
     def _unique(self, values: list[str]) -> list[str]:
         seen = set()
@@ -405,6 +402,7 @@ class CoderDiffPreviewAgent:
         self.handoff_service = handoff_service
         self.workspace_service = workspace_service
         self.execution_store = execution_store
+        self.output_parser = StructuredOutputParser()
 
     async def preview_diff(
         self,
@@ -436,7 +434,8 @@ class CoderDiffPreviewAgent:
                 )
             )
         except OllamaServiceError as exc:
-            raise CoderDryRunError(str(exc)) from exc
+            classification = self.output_parser.classify_ollama_error(exc)
+            raise CoderDryRunError(f"{classification}: {exc}") from exc
 
         proposal = self._parse_diff_proposal(model_response.message)
 
@@ -740,17 +739,10 @@ class CoderDiffPreviewAgent:
         return self._unique(warnings)
 
     def _extract_json_object(self, raw_response: str):
-        match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
-
-        if match is None:
-            raise CoderDryRunError("Coder diff-preview model did not return valid JSON")
-
         try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise CoderDryRunError(
-                "Coder diff-preview model did not return valid JSON"
-            ) from exc
+            return self.output_parser._extract_json_object(raw_response, "Coder diff-preview")
+        except StructuredOutputError as exc:
+            raise CoderDryRunError(str(exc)) from exc
 
     def _normalize_string_list(self, value) -> list[str]:
         if value is None:

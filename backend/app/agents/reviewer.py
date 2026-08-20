@@ -1,7 +1,4 @@
 import json
-import re
-
-from pydantic import ValidationError
 
 from app.models.chat import ChatRequest
 from app.models.planner import safe_context_payload
@@ -10,6 +7,7 @@ from app.models.reviewer import (
     ReviewerRequest,
     ReviewerResponse,
 )
+from app.services.model_reliability import StructuredOutputError, StructuredOutputParser
 from app.services.ollama import OllamaService, OllamaServiceError
 
 
@@ -26,6 +24,7 @@ class ReviewerAgent:
 
     def __init__(self, ollama_service: OllamaService) -> None:
         self.ollama_service = ollama_service
+        self.output_parser = StructuredOutputParser()
 
     async def review_plan(self, request: ReviewerRequest) -> ReviewerResponse:
         """
@@ -42,7 +41,8 @@ class ReviewerAgent:
                 )
             )
         except OllamaServiceError as exc:
-            raise ReviewerAgentError(str(exc)) from exc
+            classification = self.output_parser.classify_ollama_error(exc)
+            raise ReviewerAgentError(f"{classification}: {exc}") from exc
 
         model_payload = self._parse_model_payload(model_response.message)
 
@@ -93,24 +93,10 @@ class ReviewerAgent:
 
     def _parse_model_payload(self, raw_response: str) -> ReviewerModelPayload:
         try:
-            payload = json.loads(raw_response)
-        except json.JSONDecodeError:
-            payload = self._extract_json_object(raw_response)
-
-        try:
-            return ReviewerModelPayload.model_validate(payload)
-        except ValidationError as exc:
-            raise ReviewerAgentError(
-                "Reviewer model returned malformed review output"
-            ) from exc
-
-    def _extract_json_object(self, raw_response: str):
-        match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
-
-        if match is None:
-            raise ReviewerAgentError("Reviewer model did not return valid JSON")
-
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise ReviewerAgentError("Reviewer model did not return valid JSON") from exc
+            return self.output_parser.parse(
+                raw_response=raw_response,
+                model_type=ReviewerModelPayload,
+                agent_name="Reviewer",
+            )
+        except StructuredOutputError as exc:
+            raise ReviewerAgentError(str(exc)) from exc

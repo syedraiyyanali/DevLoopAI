@@ -1,8 +1,4 @@
 import json
-import re
-
-from pydantic import ValidationError
-
 from app.models.chat import ChatRequest
 from app.models.planner import (
     PlannerModelPayload,
@@ -12,6 +8,7 @@ from app.models.planner import (
     safe_context_payload,
 )
 from app.models.workspace import WorkspaceContextSummary
+from app.services.model_reliability import StructuredOutputError, StructuredOutputParser
 from app.services.ollama import OllamaService, OllamaServiceError
 from app.services.workspace import WorkspaceService
 
@@ -34,6 +31,7 @@ class PlannerAgent:
     ) -> None:
         self.ollama_service = ollama_service
         self.workspace_service = workspace_service
+        self.output_parser = StructuredOutputParser()
 
     async def create_plan(self, request: PlannerRequest) -> PlannerResponse:
         """
@@ -57,7 +55,8 @@ class PlannerAgent:
                 )
             )
         except OllamaServiceError as exc:
-            raise PlannerAgentError(str(exc)) from exc
+            classification = self.output_parser.classify_ollama_error(exc)
+            raise PlannerAgentError(f"{classification}: {exc}") from exc
 
         model_payload = self._parse_model_payload(model_response.message)
 
@@ -105,27 +104,13 @@ class PlannerAgent:
 
     def _parse_model_payload(self, raw_response: str) -> PlannerModelPayload:
         try:
-            payload = json.loads(raw_response)
-        except json.JSONDecodeError:
-            payload = self._extract_json_object(raw_response)
-
-        try:
-            return PlannerModelPayload.model_validate(payload)
-        except ValidationError as exc:
-            raise PlannerAgentError(
-                "Planner model returned malformed plan output"
-            ) from exc
-
-    def _extract_json_object(self, raw_response: str):
-        match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
-
-        if match is None:
-            raise PlannerAgentError("Planner model did not return valid JSON")
-
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise PlannerAgentError("Planner model did not return valid JSON") from exc
+            return self.output_parser.parse(
+                raw_response=raw_response,
+                model_type=PlannerModelPayload,
+                agent_name="Planner",
+            )
+        except StructuredOutputError as exc:
+            raise PlannerAgentError(str(exc)) from exc
 
     def _planner_context(
         self,

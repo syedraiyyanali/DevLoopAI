@@ -214,7 +214,9 @@ def test_reviewer_maps_ollama_errors_to_bad_gateway(monkeypatch):
     )
 
     assert response.status_code == 502
-    assert response.json()["error"]["message"] == "Unable to connect to Ollama"
+    assert response.json()["error"]["message"] == (
+        "MODEL_UNAVAILABLE: Unable to connect to Ollama"
+    )
 
 
 def test_reviewer_rejects_missing_planner_data():

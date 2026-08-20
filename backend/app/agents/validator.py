@@ -1,8 +1,5 @@
 import json
-import re
 from pathlib import Path
-
-from pydantic import ValidationError
 
 from app.models.chat import ChatRequest
 from app.models.planner import safe_context_payload
@@ -12,6 +9,7 @@ from app.models.validator import (
     ValidatorRequest,
     ValidatorResponse,
 )
+from app.services.model_reliability import StructuredOutputError, StructuredOutputParser
 from app.services.ollama import OllamaService, OllamaServiceError
 from app.services.workspace import WorkspaceAccessError, WorkspaceService
 
@@ -65,6 +63,7 @@ class ValidatorAgent:
     ) -> None:
         self.ollama_service = ollama_service
         self.workspace_service = workspace_service
+        self.output_parser = StructuredOutputParser()
 
     async def validate_plan(self, request: ValidatorRequest) -> ValidatorResponse:
         """
@@ -82,7 +81,8 @@ class ValidatorAgent:
                 )
             )
         except OllamaServiceError as exc:
-            raise ValidatorAgentError(str(exc)) from exc
+            classification = self.output_parser.classify_ollama_error(exc)
+            raise ValidatorAgentError(f"{classification}: {exc}") from exc
 
         model_payload = self._parse_model_payload(model_response.message)
         merged = self._merge_validation(deterministic, model_payload)
@@ -271,27 +271,13 @@ class ValidatorAgent:
 
     def _parse_model_payload(self, raw_response: str) -> ValidatorModelPayload:
         try:
-            payload = json.loads(raw_response)
-        except json.JSONDecodeError:
-            payload = self._extract_json_object(raw_response)
-
-        try:
-            return ValidatorModelPayload.model_validate(payload)
-        except ValidationError as exc:
-            raise ValidatorAgentError(
-                "Validator model returned malformed validation output"
-            ) from exc
-
-    def _extract_json_object(self, raw_response: str):
-        match = re.search(r"\{.*\}", raw_response, flags=re.DOTALL)
-
-        if match is None:
-            raise ValidatorAgentError("Validator model did not return valid JSON")
-
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise ValidatorAgentError("Validator model did not return valid JSON") from exc
+            return self.output_parser.parse(
+                raw_response=raw_response,
+                model_type=ValidatorModelPayload,
+                agent_name="Validator",
+            )
+        except StructuredOutputError as exc:
+            raise ValidatorAgentError(str(exc)) from exc
 
     def _merge_validation(
         self,
