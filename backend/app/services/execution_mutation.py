@@ -288,7 +288,7 @@ class ExecutionMutationService:
         request: ExecutionApplyRequest,
         canonical: ExecutionHandoffResponse,
     ) -> None:
-        if request.handoff.model_dump(mode="json") != canonical.model_dump(mode="json"):
+        if self._stable_handoff_contract(request.handoff) != self._stable_handoff_contract(canonical):
             raise ExecutionMutationBlockedError("Submitted handoff is stale or not canonical.")
         if canonical.preflight_result.status != "READY_FOR_EXECUTION":
             raise ExecutionMutationBlockedError("Execution preflight is not ready.")
@@ -329,6 +329,23 @@ class ExecutionMutationService:
             raise ExecutionMutationBlockedError("Dry-run modify-file list is inconsistent.")
         if request.dry_run.files_would_create != create_paths:
             raise ExecutionMutationBlockedError("Dry-run create-file list is inconsistent.")
+
+    def _stable_handoff_contract(self, handoff: ExecutionHandoffResponse) -> dict:
+        preflight = handoff.preflight_result
+        return {
+            "workflow_id": handoff.workflow_id,
+            "approved_plan_fingerprint": handoff.approved_plan_fingerprint,
+            "workspace_path": handoff.workspace_path,
+            "approved_planned_changes": handoff.approved_planned_changes,
+            "allowed_files": handoff.allowed_files,
+            "allowed_operation_types": handoff.allowed_operation_types,
+            "expected_tests": handoff.expected_tests,
+            "approval_status": handoff.user_approval_metadata.approval_status,
+            "approved_at": handoff.user_approval_metadata.approved_at,
+            "fingerprint": preflight.fingerprint.model_dump(mode="json"),
+            "preflight_status": preflight.status,
+            "workspace": preflight.workspace.model_dump(mode="json"),
+        }
 
     def _validate_retry_handoff(self, handoff: ExecutionHandoffResponse) -> None:
         if handoff.preflight_result.status != "READY_FOR_EXECUTION":

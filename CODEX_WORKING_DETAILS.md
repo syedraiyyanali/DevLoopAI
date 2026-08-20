@@ -3,15 +3,15 @@
 ## Last Updated
 
 Date: 2026-08-20
-Time: 00:00:00 +05:00
+Time: 21:02:38 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 39 controlled Git commit workflow
-Working Tree: clean after Step 39 feature commit
-Last Push: Step 39 checkpoint pushed to origin/main
+Latest Commit: Step 40 better test selection and validation strategy
+Working Tree: clean after Step 40 feature commit
+Last Push: Step 40 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 39: Controlled Git Commit Workflow
+Step: Sprint 1 - Step 40: Better Test Selection and Validation Strategy
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 39 controlled Git commit workflow completed, verified, committed, and pushed.
+Step 40 better test selection and validation strategy completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 39 checkpoint with Sprint 1 Step 40.
+Continue from the verified Step 40 checkpoint with Sprint 1 Step 41.
 
 ## What Has Been Completed
 
@@ -789,6 +789,26 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 39 frontend production build: PASS.
 - Step 39 route render smoke check: PASS; Next.js production route returned HTTP 200.
 - Step 39 disposable Git verification: PASS via tests; quality-passed execution committed only `sample.py`, incomplete quality blocked commit, unrelated changed files blocked commit, and multiline commit message was sanitized.
+- Added deterministic verification selection policy:
+  - `python_compile` is required for changed Python files.
+  - `pytest` is required only when Python files change and pytest project markers are present.
+  - `frontend_lint` is required only when frontend files change and a visible `package.json` defines a `lint` script.
+  - `frontend_build` is required only when frontend files change and a visible `package.json` defines a `build` script.
+  - Non-applicable checks are returned with deterministic skip reasons.
+- Added read-only verification plan API:
+  - `GET /api/v1/workflows/execution/{execution_id}/verification-plan`
+- Quality Gate now reuses the shared verification policy and returns the verification plan with reasons, skipped checks, warnings, and blockers.
+- Controlled task verification now continues to use the Quality Gate required-check policy, now sourced from the shared policy service.
+- Frontend Quality Gate card now shows the verification selection policy for each check.
+- Adjusted controlled mutation canonical handoff comparison to compare stable approval/allowlist/preflight-readiness fields and leave exact file freshness to reviewed-diff hash checks.
+- Added a 1-second preflight timestamp tolerance to avoid Windows same-instant file mtime false positives while preserving exact stale-content hash checks at apply time.
+- Step 40 focused verification policy/quality/verification tests: PASS, `41 passed`.
+- Step 40 affected execution pipeline tests: PASS, `102 passed`.
+- Step 40 full backend pytest: PASS, `234 passed`.
+- Step 40 Python compile check: PASS.
+- Step 40 frontend ESLint: PASS.
+- Step 40 frontend production build: PASS.
+- Step 40 route render smoke check: PASS; Next.js production route returned HTTP 200 on port `3105`.
 
 ## Known Problems
 
@@ -813,7 +833,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 36 multi-file context selection is verified locally and ready to commit/push.
 - Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
 - Step 38 safe Git diff/status integration is verified, committed, and pushed.
-- Step 39 controlled Git commit workflow is verified locally and ready to commit/push.
+- Step 39 controlled Git commit workflow is verified, committed, and pushed.
+- Step 40 better test selection and validation strategy is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -882,6 +903,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 37 changed expected Ollama-unavailable API error messages to include the deterministic classification prefix `MODEL_UNAVAILABLE`.
 - Step 38 adds only read-only Git operations. Controlled commit remains unavailable until Step 39.
 - Step 39 fixture work exposed that Quality Gate requires persisted per-file execution audit rows as well as response JSON; tests now record both, matching real mutation behavior.
+- Step 40 fixed volatile handoff comparison around regenerated preflight file metadata; stable approval/allowlist fields remain canonical while exact reviewed file content is still protected by deterministic hashes.
+- Step 40 fixed Windows same-instant approval/preflight mtime false positives with a narrow timestamp tolerance and retained stale-content blocking at apply time.
 
 ## Git Commits From Recent Work
 
@@ -904,7 +927,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 6fc9afe - feat: add bounded coding context selection
 - 05cdb1f - feat: add model structured-output reliability
 - c9a5053 - feat: add read-only git status integration
-- Step 39 - pending commit: feat: add controlled git commit workflow
+- 1b26a16 - feat: add controlled git commit workflow
+- Step 40 - pending commit: feat: add verification selection policy
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -934,6 +958,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/api/v1/endpoints/coder.py`
 - `backend/app/api/v1/endpoints/git_commit.py`
 - `backend/app/api/v1/endpoints/git_status.py`
+- `backend/app/api/v1/endpoints/execution_verification.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/agents/coder.py`
 - `backend/app/models/autonomous_task.py`
@@ -941,6 +966,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/models/coder.py`
 - `backend/app/models/execution_mutation.py`
 - `backend/app/models/git_commit.py`
+- `backend/app/models/execution_quality.py`
+- `backend/app/models/execution_verification_plan.py`
 - `backend/app/models/task_execution.py`
 - `backend/app/services/autonomous_task.py`
 - `backend/app/services/autonomous_task_store.py`
@@ -948,6 +975,10 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/services/model_reliability.py`
 - `backend/app/services/git_commit.py`
 - `backend/app/services/git_status.py`
+- `backend/app/services/execution_preflight.py`
+- `backend/app/services/execution_quality.py`
+- `backend/app/services/execution_verification.py`
+- `backend/app/services/execution_verification_policy.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
 - `backend/tests/test_autonomous_task_api.py`
@@ -956,6 +987,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/tests/test_model_reliability.py`
 - `backend/tests/test_git_commit_api.py`
 - `backend/tests/test_git_status_api.py`
+- `backend/tests/test_execution_verification_plan_api.py`
 - `backend/tests/test_planner_api.py`
 - `backend/tests/test_reviewer_api.py`
 - `backend/tests/test_validator_api.py`
@@ -974,14 +1006,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 40 - Better Test Selection and Validation Strategy.
+Recommended next task: Sprint 1 Step 41 - Commit History and Quality-Aware Release Notes.
 
 ## Next Files Likely to Change
 
-- deterministic verification planning tiers
-- select the smallest meaningful allowlisted checks for changed files
-- record verification selection reasons for audit/history
-- update Quality Gate policy to understand improved verification requirements
+- read-only committed execution audit summaries
+- quality-aware local release/checkpoint notes
+- include workflow, execution, verification, quality, and commit audit references
+- keep Git push/deploy/manual publishing outside this step unless explicitly requested
 
 ## Do Not Forget
 

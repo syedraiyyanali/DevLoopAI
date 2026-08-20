@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.models.execution_preflight import (
@@ -27,6 +27,8 @@ class ExecutionPreflightService:
     """
     Read-only preflight checks for approved planning workflow records.
     """
+
+    timestamp_tolerance = timedelta(seconds=1)
 
     def __init__(
         self,
@@ -236,7 +238,9 @@ class ExecutionPreflightService:
 
         if approval_decided_at is not None:
             modified_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
-            modified_after_approval = modified_at > approval_decided_at
+            modified_after_approval = modified_at > (
+                approval_decided_at + self.timestamp_tolerance
+            )
 
             if modified_after_approval:
                 detected_changes.append(

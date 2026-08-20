@@ -482,6 +482,31 @@ export interface ExecutionVerificationHistoryResponse {
   verifications: ExecutionVerificationResult[];
 }
 
+export type VerificationPlanTier = "required" | "recommended" | "not_applicable";
+
+export interface VerificationPlanCheck {
+  verification_type: string;
+  command_identity: string;
+  tier: VerificationPlanTier;
+  applicable: boolean;
+  selected_by_default: boolean;
+  reason: string;
+  skip_reason: string | null;
+}
+
+export interface ExecutionVerificationPlanResponse {
+  execution_id: string;
+  workflow_id: string;
+  workspace_path: string;
+  changed_files: string[];
+  required_verification_types: string[];
+  recommended_verification_types: string[];
+  skipped_verification_types: string[];
+  checks: VerificationPlanCheck[];
+  warnings: string[];
+  blockers: string[];
+}
+
 export interface GitChangedFile {
   relative_path: string;
   index_status: string;
@@ -596,6 +621,7 @@ export interface ExecutionQualityResponse {
   quality_status: QualityStatus;
   execution_status: string;
   required_verification_types: string[];
+  verification_plan: ExecutionVerificationPlanResponse | null;
   verification_summary: VerificationSummary[];
   passed_checks: string[];
   failed_checks: string[];
@@ -1126,6 +1152,14 @@ export async function listExecutionVerifications(
 ): Promise<ExecutionVerificationHistoryResponse> {
   return requestJson<ExecutionVerificationHistoryResponse>(
     `/workflows/execution/${encodeURIComponent(executionId)}/verifications`,
+  );
+}
+
+export async function getExecutionVerificationPlan(
+  executionId: string,
+): Promise<ExecutionVerificationPlanResponse> {
+  return requestJson<ExecutionVerificationPlanResponse>(
+    `/workflows/execution/${encodeURIComponent(executionId)}/verification-plan`,
   );
 }
 

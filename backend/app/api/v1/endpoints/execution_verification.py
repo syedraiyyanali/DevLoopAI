@@ -7,6 +7,7 @@ from app.models.execution_verification import (
     ExecutionVerificationRequest,
     ExecutionVerificationResponse,
 )
+from app.models.execution_verification_plan import ExecutionVerificationPlanResponse
 from app.services.execution_store import ExecutionRecordNotFoundError, ExecutionStore
 from app.services.execution_verification import ExecutionVerificationRunner
 from app.services.planning_approval import (
@@ -43,6 +44,21 @@ def verify_execution(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{execution_id}/verification-plan",
+    response_model=ExecutionVerificationPlanResponse,
+    summary="Describe deterministic verification selection for an execution",
+)
+def get_execution_verification_plan(
+    execution_id: str,
+) -> ExecutionVerificationPlanResponse:
+    """Return required/recommended/skipped allowlisted checks without running them."""
+    try:
+        return get_execution_verification_runner().plan(execution_id)
+    except ExecutionRecordNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(

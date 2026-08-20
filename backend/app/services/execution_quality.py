@@ -1,27 +1,14 @@
 import hashlib
-import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.models.execution_quality import ExecutionQualityResponse, VerificationSummary
 from app.models.execution_verification import ExecutionVerificationResult
+from app.models.execution_verification_plan import ExecutionVerificationPlanResponse
 from app.services.execution_store import ExecutionStore
+from app.services.execution_verification_policy import ExecutionVerificationPolicy
 from app.services.workspace import WorkspaceAccessError, WorkspaceService
-
-
-PYTHON_EXTENSIONS = {".py"}
-FRONTEND_EXTENSIONS = {
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-    ".mjs",
-    ".cjs",
-    ".css",
-    ".scss",
-    ".sass",
-}
 
 
 class ExecutionQualityGate:
@@ -35,12 +22,17 @@ class ExecutionQualityGate:
     ) -> None:
         self.execution_store = execution_store
         self.workspace_service = workspace_service
+        self.policy = ExecutionVerificationPolicy(
+            execution_store=execution_store,
+            workspace_service=workspace_service,
+        )
 
     def evaluate(self, execution_id: str) -> ExecutionQualityResponse:
         execution = self.execution_store.get_execution(execution_id)
         audit = self.execution_store.get_execution_audit(execution_id)
         verifications = self.execution_store.list_verifications(execution_id)
-        required = self.required_verifications(execution)
+        verification_plan = self.policy.plan_for_execution(execution)
+        required = verification_plan.required_verification_types
         blockers = self._audit_blockers(execution, audit)
         warnings = []
         reasons = []
@@ -50,6 +42,7 @@ class ExecutionQualityGate:
                 execution=execution,
                 status="ROLLED_BACK",
                 required=required,
+                verification_plan=verification_plan,
                 verifications=verifications,
                 rollback_status="ROLLED_BACK",
                 rollback_recommended=False,
@@ -68,6 +61,7 @@ class ExecutionQualityGate:
                 execution=execution,
                 status="BLOCKED",
                 required=required,
+                verification_plan=verification_plan,
                 verifications=verifications,
                 rollback_status="NOT_ROLLED_BACK",
                 rollback_recommended=True,
@@ -86,6 +80,7 @@ class ExecutionQualityGate:
                 execution=execution,
                 status="BLOCKED",
                 required=required,
+                verification_plan=verification_plan,
                 verifications=verifications,
                 rollback_status="NOT_ROLLED_BACK",
                 rollback_recommended=True,
@@ -99,6 +94,7 @@ class ExecutionQualityGate:
                 execution=execution,
                 status="QUALITY_FAILED",
                 required=required,
+                verification_plan=verification_plan,
                 verifications=verifications,
                 rollback_status="NOT_ROLLED_BACK",
                 rollback_recommended=True,
@@ -115,6 +111,7 @@ class ExecutionQualityGate:
                 execution=execution,
                 status="QUALITY_INCOMPLETE",
                 required=required,
+                verification_plan=verification_plan,
                 verifications=verifications,
                 rollback_status="NOT_ROLLED_BACK",
                 rollback_recommended=False,
@@ -127,6 +124,7 @@ class ExecutionQualityGate:
             execution=execution,
             status="QUALITY_PASSED",
             required=required,
+            verification_plan=verification_plan,
             verifications=verifications,
             rollback_status="NOT_ROLLED_BACK",
             rollback_recommended=False,
@@ -137,22 +135,7 @@ class ExecutionQualityGate:
 
     def required_verifications(self, execution) -> list[str]:
         """Return deterministic allowlisted checks required for this execution."""
-        root = Path(execution.workspace_path).resolve()
-        changed_paths = [Path(result.relative_path) for result in execution.file_results]
-        required = []
-
-        if any(path.suffix.lower() in PYTHON_EXTENSIONS for path in changed_paths):
-            required.append("python_compile")
-            if self._has_pytest_project(root):
-                required.append("pytest")
-
-        if any(path.suffix.lower() in FRONTEND_EXTENSIONS for path in changed_paths):
-            if self._has_package_script(root, "lint"):
-                required.append("frontend_lint")
-            if self._has_package_script(root, "build"):
-                required.append("frontend_build")
-
-        return self._unique(required)
+        return self.policy.required_verification_types(execution)
 
     def _audit_blockers(self, execution, audit: dict[str, str]) -> list[str]:
         blockers = []
@@ -247,33 +230,13 @@ class ExecutionQualityGate:
             grouped[verification.verification_type].append(verification)
         return grouped
 
-    def _has_pytest_project(self, root: Path) -> bool:
-        if (root / "pytest.ini").is_file() or (root / "pyproject.toml").is_file():
-            return True
-        if (root / "tests").is_dir():
-            return True
-        return any(root.glob("test_*.py"))
-
-    def _has_package_script(self, root: Path, script_name: str) -> bool:
-        for manifest in sorted(root.rglob("package.json"), key=lambda path: (len(path.parts), str(path))):
-            if self.workspace_service._is_ignored_path(manifest):
-                continue
-            try:
-                relative = manifest.resolve().relative_to(root).as_posix()
-                content = self.workspace_service.read_text_file(str(root), relative).content
-                scripts = json.loads(content).get("scripts", {})
-            except (OSError, ValueError, json.JSONDecodeError, AttributeError, WorkspaceAccessError):
-                continue
-            if isinstance(scripts, dict) and isinstance(scripts.get(script_name), str):
-                return True
-        return False
-
     def _response(
         self,
         *,
         execution,
         status: str,
         required: list[str],
+        verification_plan: ExecutionVerificationPlanResponse,
         verifications: list[ExecutionVerificationResult],
         rollback_status: str,
         rollback_recommended: bool,
@@ -292,6 +255,7 @@ class ExecutionQualityGate:
             quality_status=status,
             execution_status=execution.status,
             required_verification_types=required,
+            verification_plan=verification_plan,
             verification_summary=self._verification_summary(
                 verifications=verifications,
                 required=required,

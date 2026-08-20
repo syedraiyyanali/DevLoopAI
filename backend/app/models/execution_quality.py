@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.execution_verification_plan import ExecutionVerificationPlanResponse
+
 
 QualityStatus = Literal[
     "QUALITY_PASSED",
@@ -29,6 +31,7 @@ class ExecutionQualityResponse(BaseModel):
     quality_status: QualityStatus
     execution_status: str
     required_verification_types: list[str] = Field(default_factory=list)
+    verification_plan: ExecutionVerificationPlanResponse | None = None
     verification_summary: list[VerificationSummary] = Field(default_factory=list)
     passed_checks: list[str] = Field(default_factory=list)
     failed_checks: list[str] = Field(default_factory=list)
@@ -40,4 +43,3 @@ class ExecutionQualityResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     quality_timestamp: str
-

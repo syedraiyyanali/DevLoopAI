@@ -1511,6 +1511,30 @@ function QualityGateCard({ quality }: { quality: ExecutionQualityResponse | null
       <ListBlock label="Skipped checks" values={quality.skipped_checks} />
       <ListBlock label="Warnings" values={quality.warnings} />
       <ListBlock label="Blockers" values={quality.blockers} />
+      {quality.verification_plan ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-medium uppercase text-zinc-500">
+            Verification selection policy
+          </p>
+          {quality.verification_plan.checks.map((check) => (
+            <div
+              key={check.verification_type}
+              className="rounded-md border border-zinc-200 bg-white p-2 text-sm text-zinc-700"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-medium text-zinc-900">{check.verification_type}</p>
+                <p className="text-xs uppercase text-zinc-500">{check.tier}</p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-zinc-600">{check.reason}</p>
+              {check.skip_reason ? (
+                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                  Skipped: {check.skip_reason}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-4 space-y-2">
         <p className="text-xs font-medium uppercase text-zinc-500">
           Verification summary

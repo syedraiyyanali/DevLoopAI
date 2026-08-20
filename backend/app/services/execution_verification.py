@@ -20,7 +20,9 @@ from app.models.execution_verification import (
     ExecutionVerificationResponse,
     ExecutionVerificationResult,
 )
+from app.models.execution_verification_plan import ExecutionVerificationPlanResponse
 from app.services.execution_store import ExecutionStore
+from app.services.execution_verification_policy import ExecutionVerificationPolicy
 from app.services.planning_approval import PlanningApprovalStore
 from app.services.workspace import (
     WorkspaceAccessError,
@@ -144,6 +146,10 @@ class ExecutionVerificationRunner:
         self.execution_store = execution_store
         self.approval_store = approval_store
         self.workspace_service = workspace_service
+        self.policy = ExecutionVerificationPolicy(
+            execution_store=execution_store,
+            workspace_service=workspace_service,
+        )
 
     def verify(
         self,
@@ -177,6 +183,9 @@ class ExecutionVerificationRunner:
             workflow_id=execution.workflow_id,
             verifications=self.execution_store.list_verifications(execution_id),
         )
+
+    def plan(self, execution_id: str) -> ExecutionVerificationPlanResponse:
+        return self.policy.plan_for_execution_id(execution_id)
 
     def _verify_one(self, *, verification_type: str, execution, lifecycle_blockers):
         definition = self.registry.get(verification_type)
