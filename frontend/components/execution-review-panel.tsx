@@ -6,7 +6,9 @@ import {
   ApiError,
   applyTaskExecution,
   applyReviewedChanges,
+  continueAutonomousTask,
   createExecutionHandoff,
+  getAutonomousTask,
   getExecutionHistoryDetail,
   getExecutionQuality,
   getPlanningWorkflowHistory,
@@ -21,8 +23,10 @@ import {
   runCoderDryRun,
   runExecutionPreflight,
   runExecutionVerification,
+  startAutonomousTask,
   prepareTaskExecution,
   verifyTaskExecution,
+  type AutonomousTaskSession,
   type CoderDiffPreviewResponse,
   type CoderDryRunResponse,
   type ExecutionApplyResponse,
@@ -53,6 +57,9 @@ type LoadingAction =
   | "task-verify"
   | "task-rollback"
   | "task-retry"
+  | "autonomous-start"
+  | "autonomous-continue"
+  | "autonomous-load"
   | null;
 
 const SERVER_ALLOWED_VERIFICATIONS = [
@@ -82,6 +89,10 @@ export default function ExecutionReviewPanel() {
   const [executionHistoryError, setExecutionHistoryError] = useState("");
   const [taskExecution, setTaskExecution] = useState<TaskExecutionSession | null>(null);
   const [taskExecutionIdInput, setTaskExecutionIdInput] = useState("");
+  const [autonomousTask, setAutonomousTask] = useState<AutonomousTaskSession | null>(null);
+  const [autonomousTaskText, setAutonomousTaskText] = useState("");
+  const [autonomousWorkspacePath, setAutonomousWorkspacePath] = useState("");
+  const [autonomousSessionIdInput, setAutonomousSessionIdInput] = useState("");
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
@@ -288,6 +299,53 @@ export default function ExecutionReviewPanel() {
       "task-retry",
       () => retryTaskExecution(taskExecution.task_execution_id, taskExecution.state),
       (result) => setTaskExecution(result),
+    );
+  }
+
+  async function startAutonomousSession() {
+    if (!autonomousTaskText.trim()) {
+      return;
+    }
+
+    await runStep(
+      "autonomous-start",
+      () => startAutonomousTask(autonomousTaskText.trim(), autonomousWorkspacePath),
+      (result) => {
+        setAutonomousTask(result);
+        setAutonomousSessionIdInput(result.autonomous_session_id);
+        void loadHistory();
+      },
+    );
+  }
+
+  async function loadAutonomousSession() {
+    if (!autonomousSessionIdInput.trim()) {
+      return;
+    }
+
+    await runStep(
+      "autonomous-load",
+      () => getAutonomousTask(autonomousSessionIdInput.trim()),
+      (result) => setAutonomousTask(result),
+    );
+  }
+
+  async function continueAutonomousSession() {
+    if (!autonomousTask) {
+      return;
+    }
+
+    await runStep(
+      "autonomous-continue",
+      () => continueAutonomousTask(autonomousTask.autonomous_session_id, autonomousTask.state),
+      (result) => {
+        setAutonomousTask(result);
+        if (result.task_execution) {
+          setTaskExecution(result.task_execution);
+        }
+        void loadHistory();
+        void loadExecutionHistory();
+      },
     );
   }
 
@@ -625,6 +683,22 @@ export default function ExecutionReviewPanel() {
         </div>
       </div>
 
+      <AutonomousTaskSection
+        autonomousSessionIdInput={autonomousSessionIdInput}
+        autonomousTask={autonomousTask}
+        autonomousTaskText={autonomousTaskText}
+        autonomousWorkspacePath={autonomousWorkspacePath}
+        isContinuing={loadingAction === "autonomous-continue"}
+        isLoading={loadingAction === "autonomous-load"}
+        isStarting={loadingAction === "autonomous-start"}
+        onContinue={() => void continueAutonomousSession()}
+        onLoad={() => void loadAutonomousSession()}
+        onSessionIdChange={setAutonomousSessionIdInput}
+        onStart={() => void startAutonomousSession()}
+        onTaskChange={setAutonomousTaskText}
+        onWorkspacePathChange={setAutonomousWorkspacePath}
+      />
+
       <ControlledTaskSection
         isApplying={loadingAction === "task-apply"}
         isPreparing={loadingAction === "task-prepare"}
@@ -653,6 +727,147 @@ export default function ExecutionReviewPanel() {
         selectedExecution={selectedExecution}
       />
     </section>
+  );
+}
+
+function AutonomousTaskSection({
+  autonomousSessionIdInput,
+  autonomousTask,
+  autonomousTaskText,
+  autonomousWorkspacePath,
+  isContinuing,
+  isLoading,
+  isStarting,
+  onContinue,
+  onLoad,
+  onSessionIdChange,
+  onStart,
+  onTaskChange,
+  onWorkspacePathChange,
+}: {
+  autonomousSessionIdInput: string;
+  autonomousTask: AutonomousTaskSession | null;
+  autonomousTaskText: string;
+  autonomousWorkspacePath: string;
+  isContinuing: boolean;
+  isLoading: boolean;
+  isStarting: boolean;
+  onContinue: () => void;
+  onLoad: () => void;
+  onSessionIdChange: (value: string) => void;
+  onStart: () => void;
+  onTaskChange: (value: string) => void;
+  onWorkspacePathChange: (value: string) => void;
+}) {
+  const isBusy = isContinuing || isLoading || isStarting;
+  const canStart = autonomousTaskText.trim().length > 0 && !isBusy;
+  const canLoad = autonomousSessionIdInput.trim().length > 0 && !isBusy;
+  const canContinue =
+    Boolean(autonomousTask) &&
+    !["QUALITY_PASSED", "RETRY_LIMIT_REACHED", "ROLLED_BACK", "BLOCKED"].includes(
+      autonomousTask?.state ?? "",
+    ) &&
+    !isBusy;
+
+  return (
+    <div className="mt-5 rounded-md border border-zinc-200 bg-white p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-zinc-950">Bounded Autonomous Task Mode</p>
+        <p className="text-sm leading-6 text-zinc-600">
+          Coordinates safe planning, preparation, verification, quality, and retry preparation.
+          It stops for plan approval and again for every reviewed diff before mutation.
+        </p>
+      </div>
+      <div className="mt-4 grid gap-2 lg:grid-cols-[1fr_1fr_auto]">
+        <input
+          className="h-10 min-w-0 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-950"
+          placeholder="Development task"
+          value={autonomousTaskText}
+          onChange={(event) => onTaskChange(event.target.value)}
+        />
+        <input
+          className="h-10 min-w-0 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-950"
+          placeholder="Optional workspace path"
+          value={autonomousWorkspacePath}
+          onChange={(event) => onWorkspacePathChange(event.target.value)}
+        />
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          disabled={!canStart}
+          type="button"
+          onClick={onStart}
+        >
+          {isStarting ? "Starting..." : "Start bounded session"}
+        </button>
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          className="h-10 min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-950"
+          placeholder="Autonomous session ID"
+          value={autonomousSessionIdInput}
+          onChange={(event) => onSessionIdChange(event.target.value)}
+        />
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={!canLoad}
+          type="button"
+          onClick={onLoad}
+        >
+          {isLoading ? "Loading..." : "Load session"}
+        </button>
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={!canContinue}
+          type="button"
+          onClick={onContinue}
+        >
+          {isContinuing ? "Continuing..." : "Continue safe stages"}
+        </button>
+      </div>
+      {autonomousTask ? (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="break-all font-semibold text-zinc-950">
+                {autonomousTask.autonomous_session_id}
+              </p>
+              <p className="break-all text-xs text-zinc-500">
+                Workflow: {autonomousTask.workflow_id ?? "Not created"}
+              </p>
+            </div>
+            <StatusBadge value={autonomousTask.state} />
+          </div>
+          <p className="mt-3">{autonomousTask.message}</p>
+          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+            <HashRow label="Current stage" value={autonomousTask.current_stage} />
+            <HashRow
+              label="Waiting for"
+              value={autonomousTask.waiting_for ?? "No user action currently required"}
+            />
+            <HashRow
+              label="Attempt"
+              value={`${autonomousTask.current_attempt} of ${autonomousTask.max_attempts}`}
+            />
+            <HashRow
+              label="Autonomous mutation"
+              value={autonomousTask.mutation_performed_by_autonomous_mode ? "Yes" : "No"}
+            />
+            <HashRow label="Task execution" value={autonomousTask.task_execution_id ?? "Not prepared"} />
+            <HashRow label="Plan fingerprint" value={autonomousTask.plan_fingerprint ?? "Not planned"} />
+          </div>
+          <ListBlock label="Progress" values={autonomousTask.progress} />
+          <ListBlock label="Warnings" values={autonomousTask.warnings} />
+          <ListBlock label="Blockers" values={autonomousTask.blockers} />
+          {autonomousTask.task_execution ? (
+            <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase text-zinc-500">Linked task state</p>
+              <HashRow label="State" value={autonomousTask.task_execution.state} />
+              <HashRow label="Message" value={autonomousTask.task_execution.message} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

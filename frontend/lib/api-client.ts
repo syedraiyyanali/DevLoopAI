@@ -211,6 +211,43 @@ export interface PlanningWorkflowHistoryRecord
   final_reviewed_summary: FinalReviewedPlanSummary;
 }
 
+export type AutonomousTaskState =
+  | "ANALYZING"
+  | "PLANNING"
+  | "AWAITING_PLAN_APPROVAL"
+  | "PREPARING_EXECUTION"
+  | "AWAITING_EXECUTION_APPROVAL"
+  | "VERIFYING"
+  | "QUALITY_PASSED"
+  | "QUALITY_FAILED"
+  | "RETRY_PREPARING"
+  | "RETRY_LIMIT_REACHED"
+  | "BLOCKED"
+  | "ROLLED_BACK";
+
+export interface AutonomousTaskSession {
+  autonomous_session_id: string;
+  state: AutonomousTaskState;
+  current_stage: string;
+  user_task: string;
+  workspace_path: string | null;
+  workflow_id: string | null;
+  plan_fingerprint: string | null;
+  task_execution_id: string | null;
+  current_attempt: number;
+  max_attempts: number;
+  planning_result: PlanningWorkflowResponse | null;
+  task_execution: TaskExecutionSession | null;
+  blockers: string[];
+  warnings: string[];
+  progress: string[];
+  waiting_for: string | null;
+  mutation_performed_by_autonomous_mode: boolean;
+  created_at: string;
+  updated_at: string;
+  message: string;
+}
+
 export type ExecutionPreflightStatus =
   | "READY_FOR_EXECUTION"
   | "REAPPROVAL_REQUIRED"
@@ -864,6 +901,48 @@ export async function getPlanningWorkflowHistory(
 ): Promise<PlanningWorkflowHistoryRecord> {
   return requestJson<PlanningWorkflowHistoryRecord>(
     `/workflows/planning/${encodeURIComponent(workflowId)}`,
+  );
+}
+
+export async function startAutonomousTask(
+  task: string,
+  workspacePath?: string,
+): Promise<AutonomousTaskSession> {
+  return requestJson<AutonomousTaskSession>("/workflows/autonomous-task", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      task,
+      workspace_path: workspacePath?.trim() || null,
+    }),
+  });
+}
+
+export async function getAutonomousTask(
+  autonomousSessionId: string,
+): Promise<AutonomousTaskSession> {
+  return requestJson<AutonomousTaskSession>(
+    `/workflows/autonomous-task/${encodeURIComponent(autonomousSessionId)}`,
+  );
+}
+
+export async function continueAutonomousTask(
+  autonomousSessionId: string,
+  expectedState?: AutonomousTaskState,
+): Promise<AutonomousTaskSession> {
+  return requestJson<AutonomousTaskSession>(
+    `/workflows/autonomous-task/${encodeURIComponent(autonomousSessionId)}/continue`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        expected_state: expectedState ?? null,
+      }),
+    },
   );
 }
 

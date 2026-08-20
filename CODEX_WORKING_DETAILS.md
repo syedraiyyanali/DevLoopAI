@@ -2,16 +2,16 @@
 
 ## Last Updated
 
-Date: 2026-08-15
-Time: 10:18:00 +05:00
+Date: 2026-08-20
+Time: 00:00:00 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 33 controlled single-task execution workflow
-Working Tree: clean after Step 33 feature commit
-Last Push: Step 33 checkpoint pushed to origin/main
+Latest Commit: Step 35 bounded autonomous task mode
+Working Tree: clean after Step 35 feature commit
+Last Push: Step 35 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 33: Controlled Single-Task Execution Workflow
+Step: Sprint 1 - Step 35: Bounded Autonomous Task Mode
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 33 controlled single-task execution workflow completed, verified, committed, and pushed.
+Step 35 bounded autonomous task mode completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 33 checkpoint when the next task is requested.
+Continue from the verified Step 35 checkpoint with Sprint 1 Step 36.
 
 ## What Has Been Completed
 
@@ -704,6 +704,28 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 34 disposable scenario A: PASS via focused tests; syntax-error attempt reached `QUALITY_FAILED`, retry prepared attempt 2 without mutating files, explicit apply changed the file, verification passed, and Quality Gate returned `QUALITY_PASSED`.
 - Step 34 disposable scenario B: PASS via focused tests; attempts 1, 2, and 3 failed verification, no fourth retry was created, and final task state became `RETRY_LIMIT_REACHED`.
 - Step 34 disposable scenario C: PASS via focused tests; after a failed attempt, manual file modification caused retry to return `BLOCKED` without generating a new proposal or overwriting the newer file.
+- Added persisted bounded autonomous task sessions with states: `ANALYZING`, `PLANNING`, `AWAITING_PLAN_APPROVAL`, `PREPARING_EXECUTION`, `AWAITING_EXECUTION_APPROVAL`, `VERIFYING`, `QUALITY_PASSED`, `QUALITY_FAILED`, `RETRY_PREPARING`, `RETRY_LIMIT_REACHED`, `BLOCKED`, and `ROLLED_BACK`.
+- Added autonomous task APIs:
+  - `POST /api/v1/workflows/autonomous-task`
+  - `GET /api/v1/workflows/autonomous-task/{autonomous_session_id}`
+  - `POST /api/v1/workflows/autonomous-task/{autonomous_session_id}/continue`
+- Autonomous start runs the existing read-only Planning Workflow and stops at `AWAITING_PLAN_APPROVAL`.
+- Autonomous continue detects explicit persisted plan approval, prepares the existing controlled task execution, and stops at `AWAITING_EXECUTION_APPROVAL`.
+- Autonomous continue never applies files; every reviewed diff/retry still requires explicit Apply through the existing task execution controls.
+- After explicit Apply occurs outside autonomous mode, autonomous continue can run existing required verification and deterministic Quality Gate.
+- After `QUALITY_FAILED`, autonomous continue can prepare the next bounded retry proposal through the existing Step 34 retry path, then returns to `AWAITING_EXECUTION_APPROVAL`.
+- Autonomous sessions persist workflow ID, plan fingerprint, task execution ID, current attempt, max attempts, progress, blockers, warnings, waiting-for state, linked task state, timestamps, and a flag proving autonomous mode did not mutate files.
+- Duplicate/stale actions are guarded with expected-state checks and terminal states block further continuation.
+- Frontend Execution Review panel now includes a compact Bounded Autonomous Task Mode section for start/load/continue, state, current stage, waiting-for action, attempt count, mutation flag, progress, blockers, and linked task state.
+- Step 35 focused autonomous task tests: PASS, `9 passed`.
+- Step 35 Python compile check: PASS.
+- Step 35 full backend pytest: PASS, `210 passed`.
+- Step 35 frontend ESLint: PASS.
+- Step 35 frontend production build: PASS.
+- Step 35 route render smoke check: PASS; Next.js production route returned HTTP 200.
+- Step 35 approval-boundary tests: PASS; continuing before plan approval did not prepare execution, and continuing after plan approval prepared a diff but stopped before mutation approval.
+- Step 35 retry integration tests: PASS; autonomous continue prepared retry after quality failure without hidden mutation and respected retry terminal state.
+- Step 35 restart persistence test: PASS; autonomous session reloaded from SQLite after store reinitialization.
 
 ## Known Problems
 
@@ -723,7 +745,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 persisted execution history UI is verified, committed, and pushed.
 - Step 32 deterministic execution quality gate is verified, committed, and pushed.
 - Step 33 controlled single-task execution workflow is verified, committed, and pushed.
-- Step 34 bounded improve-and-retry loop is verified locally and ready to commit/push.
+- Step 34 bounded improve-and-retry loop is verified, committed, and pushed.
+- Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -787,6 +810,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 33 reuses existing safety services instead of duplicating approval, preflight, handoff, mutation, verification, quality, or rollback logic.
 - Step 34 preserves the same explicit mutation approval boundary for retry attempts; retry preparation creates a new reviewed diff only.
 - Step 34 fixed the retry/preflight interaction by making retry evaluate the current failed execution audit instead of requiring the original pre-mutation project preflight to still match after an intentional failed mutation.
+- Step 35 adds safe autonomous coordination without adding hidden mutation, hidden rollback, generic shell execution, dependency installation, Git operations, deployment, or autonomous mutation approval.
 
 ## Git Commits From Recent Work
 
@@ -804,7 +828,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 31 - feat: add persisted execution history UI
 - Step 32 - feat: add deterministic execution quality gate
 - Step 33 - feat: add controlled task execution workflow
-- Step 34 - pending commit: feat: add bounded task retry workflow
+- 37517e0 - feat: add bounded task retry workflow
+- Step 35 - pending commit: feat: add bounded autonomous task mode
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -830,12 +855,18 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `backend/app/api/v1/endpoints/task_execution.py`
+- `backend/app/api/v1/endpoints/autonomous_task.py`
+- `backend/app/api/v1/router.py`
 - `backend/app/agents/coder.py`
+- `backend/app/models/autonomous_task.py`
 - `backend/app/models/coder.py`
 - `backend/app/models/execution_mutation.py`
 - `backend/app/models/task_execution.py`
+- `backend/app/services/autonomous_task.py`
+- `backend/app/services/autonomous_task_store.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
+- `backend/tests/test_autonomous_task_api.py`
 - `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
@@ -851,14 +882,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 35 - Bounded Autonomous Task Mode.
+Recommended next task: Sprint 1 Step 36 - Multi-File Coding Improvements and Better Context Selection.
 
 ## Next Files Likely to Change
 
-- controlled auto-preparation of the next retry after failed quality
-- preserve explicit user approval before every mutation
-- avoid autonomous apply/rollback/command execution
-- continue using persisted attempt lineage and deterministic quality gate
+- deterministic project-aware context selection
+- bounded selected-file context for coding proposals
+- stronger multi-file dry-run/diff/apply coverage
+- multi-file stale and transactional rollback tests
 
 ## Do Not Forget
 

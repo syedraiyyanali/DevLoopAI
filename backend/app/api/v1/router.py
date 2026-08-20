@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    autonomous_task,
     chat,
     coder,
     execution_history,
@@ -73,6 +74,11 @@ api_router.include_router(
 
 api_router.include_router(
     task_execution.router,
+    tags=["Workflows"],
+)
+
+api_router.include_router(
+    autonomous_task.router,
     tags=["Workflows"],
 )
 
