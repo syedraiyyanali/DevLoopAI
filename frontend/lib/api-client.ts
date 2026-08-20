@@ -482,6 +482,37 @@ export interface ExecutionVerificationHistoryResponse {
   verifications: ExecutionVerificationResult[];
 }
 
+export interface GitChangedFile {
+  relative_path: string;
+  index_status: string;
+  worktree_status: string;
+}
+
+export interface GitCommitSummary {
+  commit: string;
+  subject: string;
+}
+
+export interface GitStatusResponse {
+  workspace_path: string;
+  is_git_repository: boolean;
+  current_branch: string | null;
+  changed_files: GitChangedFile[];
+  changed_file_count: number;
+  staged_files: string[];
+  unstaged_files: string[];
+  untracked_files: string[];
+  diff_summary: string;
+  diff_excerpt: string;
+  diff_truncated: boolean;
+  recent_commits: GitCommitSummary[];
+  execution_id: string | null;
+  execution_audit_files: string[];
+  unexpected_changed_files: string[];
+  warnings: string[];
+  blockers: string[];
+}
+
 export interface ExecutionHistoryFile {
   relative_path: string;
   operation_type: string;
@@ -1102,6 +1133,22 @@ export async function getExecutionQuality(
   return requestJson<ExecutionQualityResponse>(
     `/workflows/execution/${encodeURIComponent(executionId)}/quality`,
   );
+}
+
+export async function getGitStatus(
+  workspacePath: string,
+  executionId?: string | null,
+): Promise<GitStatusResponse> {
+  return requestJson<GitStatusResponse>("/workflows/git/status", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workspace_path: workspacePath,
+      execution_id: executionId ?? null,
+    }),
+  });
 }
 
 export async function prepareTaskExecution(

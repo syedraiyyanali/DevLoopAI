@@ -11,6 +11,7 @@ import {
   getAutonomousTask,
   getExecutionHistoryDetail,
   getExecutionQuality,
+  getGitStatus,
   getPlanningWorkflowHistory,
   getTaskExecution,
   listExecutionVerifications,
@@ -37,6 +38,7 @@ import {
   type ExecutionQualityResponse,
   type ExecutionRollbackResponse,
   type ExecutionVerificationResult,
+  type GitStatusResponse,
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
   type TaskExecutionSession,
@@ -60,6 +62,7 @@ type LoadingAction =
   | "autonomous-start"
   | "autonomous-continue"
   | "autonomous-load"
+  | "git-status"
   | null;
 
 const SERVER_ALLOWED_VERIFICATIONS = [
@@ -93,6 +96,7 @@ export default function ExecutionReviewPanel() {
   const [autonomousTaskText, setAutonomousTaskText] = useState("");
   const [autonomousWorkspacePath, setAutonomousWorkspacePath] = useState("");
   const [autonomousSessionIdInput, setAutonomousSessionIdInput] = useState("");
+  const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [error, setError] = useState("");
 
@@ -346,6 +350,24 @@ export default function ExecutionReviewPanel() {
         void loadHistory();
         void loadExecutionHistory();
       },
+    );
+  }
+
+  async function loadGitStatus() {
+    const workspacePath =
+      selectedExecution?.workspace_path ??
+      taskExecution?.workspace_path ??
+      selectedWorkflow?.workspace_path ??
+      "";
+    if (!workspacePath) {
+      setError("Select a workflow or execution with a workspace path before reading Git status.");
+      return;
+    }
+
+    await runStep(
+      "git-status",
+      () => getGitStatus(workspacePath, selectedExecution?.execution_id ?? taskExecution?.mutation_execution_id),
+      (result) => setGitStatus(result),
     );
   }
 
@@ -699,6 +721,12 @@ export default function ExecutionReviewPanel() {
         onWorkspacePathChange={setAutonomousWorkspacePath}
       />
 
+      <GitStatusSection
+        gitStatus={gitStatus}
+        isLoading={loadingAction === "git-status"}
+        onRefresh={() => void loadGitStatus()}
+      />
+
       <ControlledTaskSection
         isApplying={loadingAction === "task-apply"}
         isPreparing={loadingAction === "task-prepare"}
@@ -864,6 +892,69 @@ function AutonomousTaskSection({
               <HashRow label="State" value={autonomousTask.task_execution.state} />
               <HashRow label="Message" value={autonomousTask.task_execution.message} />
             </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GitStatusSection({
+  gitStatus,
+  isLoading,
+  onRefresh,
+}: {
+  gitStatus: GitStatusResponse | null;
+  isLoading: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="mt-5 rounded-md border border-zinc-200 bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-zinc-950">Read-Only Git Status</p>
+          <p className="text-sm leading-6 text-zinc-600">
+            Fixed read-only Git checks only. This does not stage, commit, reset, clean, push, or mutate files.
+          </p>
+        </div>
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={isLoading}
+          type="button"
+          onClick={onRefresh}
+        >
+          {isLoading ? "Reading..." : "Read Git status"}
+        </button>
+      </div>
+      {gitStatus ? (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="break-all font-semibold text-zinc-950">{gitStatus.workspace_path}</p>
+            <StatusBadge value={gitStatus.is_git_repository ? "GIT" : "NOT_GIT"} />
+          </div>
+          <HashRow label="Branch" value={gitStatus.current_branch ?? "Not available"} />
+          <HashRow label="Changed files" value={String(gitStatus.changed_file_count)} />
+          <ListBlock label="Staged" values={gitStatus.staged_files} />
+          <ListBlock label="Unstaged" values={gitStatus.unstaged_files} />
+          <ListBlock label="Untracked" values={gitStatus.untracked_files} />
+          <ListBlock label="Execution audit files" values={gitStatus.execution_audit_files} />
+          <ListBlock label="Unexpected changed files" values={gitStatus.unexpected_changed_files} />
+          <ListBlock
+            label="Recent commits"
+            values={gitStatus.recent_commits.map((commit) => `${commit.commit} ${commit.subject}`)}
+          />
+          <ListBlock label="Warnings" values={gitStatus.warnings} />
+          <ListBlock label="Blockers" values={gitStatus.blockers} />
+          {gitStatus.diff_summary ? (
+            <pre className="mt-3 max-h-40 overflow-auto rounded-md bg-white p-3 text-xs leading-5 text-zinc-800">
+              {gitStatus.diff_summary}
+            </pre>
+          ) : null}
+          {gitStatus.diff_excerpt ? (
+            <pre className="mt-3 max-h-80 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-5 text-zinc-50">
+              {gitStatus.diff_excerpt}
+              {gitStatus.diff_truncated ? "\n\n[diff truncated]" : ""}
+            </pre>
           ) : null}
         </div>
       ) : null}

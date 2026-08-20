@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     execution_preflight,
     execution_quality,
     execution_verification,
+    git_status,
     ollama,
     planner,
     planning_workflow,
@@ -99,5 +100,10 @@ api_router.include_router(
 
 api_router.include_router(
     execution_history.router,
+    tags=["Workflows"],
+)
+
+api_router.include_router(
+    git_status.router,
     tags=["Workflows"],
 )

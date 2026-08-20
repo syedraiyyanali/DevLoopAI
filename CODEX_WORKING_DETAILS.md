@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 37 model reliability and structured-output recovery
-Working Tree: clean after Step 37 feature commit
-Last Push: Step 37 checkpoint pushed to origin/main
+Latest Commit: Step 38 safe Git diff/status integration
+Working Tree: clean after Step 38 feature commit
+Last Push: Step 38 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 37: Model Reliability and Structured-Output Recovery
+Step: Sprint 1 - Step 38: Safe Git Diff and Status Integration
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 37 model reliability and structured-output recovery completed, verified, committed, and pushed.
+Step 38 safe Git diff/status integration completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 37 checkpoint with Sprint 1 Step 38.
+Continue from the verified Step 38 checkpoint with Sprint 1 Step 39.
 
 ## What Has Been Completed
 
@@ -758,6 +758,21 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 37 frontend ESLint: PASS.
 - Step 37 frontend production build: PASS.
 - Step 37 route render smoke check: PASS on rerun; initial parallel smoke timed out while the frontend build was still running, rerun returned HTTP 200.
+- Added read-only Git status API:
+  - `POST /api/v1/workflows/git/status`
+- Added fixed-command `GitStatusService` using `subprocess.run` with argument arrays, `shell=False`, bounded timeout, and bounded diff output.
+- Supported read-only Git operations: repository detection, current branch, porcelain status, staged/unstaged/untracked files, bounded `git diff`, diff summary, and recent commit summaries.
+- Git integration does not stage, commit, push, reset, clean, checkout, merge, rebase, stash, install dependencies, or execute arbitrary command strings.
+- Git status gracefully handles non-Git workspaces by returning `is_git_repository: false` with a warning.
+- Git status can compare changed files against a persisted execution audit and surface unexpected changed files.
+- Frontend Execution Review panel now includes a compact Read-Only Git Status card with branch, staged/unstaged/untracked files, execution audit files, unexpected changes, recent commits, diff summary, and bounded diff excerpt.
+- Step 38 focused Git status tests: PASS, `4 passed`.
+- Step 38 Python compile check: PASS.
+- Step 38 full backend pytest: PASS, `225 passed`.
+- Step 38 frontend ESLint: PASS.
+- Step 38 frontend production build: PASS.
+- Step 38 route render smoke check: PASS; Next.js production route returned HTTP 200.
+- Step 38 disposable Git verification: PASS via tests; temporary repo status reported modified/untracked files and bounded diff, non-Git workspace returned a safe warning, and execution-audit comparison identified unexpected changed files.
 
 ## Known Problems
 
@@ -781,6 +796,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
 - Step 36 multi-file context selection is verified locally and ready to commit/push.
 - Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
+- Step 38 safe Git diff/status integration is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -847,6 +863,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 35 adds safe autonomous coordination without adding hidden mutation, hidden rollback, generic shell execution, dependency installation, Git operations, deployment, or autonomous mutation approval.
 - Step 36 fixed a deterministic test fixture mismatch: adding a second TypeScript fixture file required updating the planner context language count from 1 to 2, because preflight correctly detected the project-context change.
 - Step 37 changed expected Ollama-unavailable API error messages to include the deterministic classification prefix `MODEL_UNAVAILABLE`.
+- Step 38 adds only read-only Git operations. Controlled commit remains unavailable until Step 39.
 
 ## Git Commits From Recent Work
 
@@ -867,7 +884,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 37517e0 - feat: add bounded task retry workflow
 - bb901a0 - feat: add bounded autonomous task mode
 - 6fc9afe - feat: add bounded coding context selection
-- Step 37 - pending commit: feat: add model structured-output reliability
+- 05cdb1f - feat: add model structured-output reliability
+- Step 38 - pending commit: feat: add read-only git status integration
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -895,6 +913,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/api/v1/endpoints/task_execution.py`
 - `backend/app/api/v1/endpoints/autonomous_task.py`
 - `backend/app/api/v1/endpoints/coder.py`
+- `backend/app/api/v1/endpoints/git_status.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/agents/coder.py`
 - `backend/app/models/autonomous_task.py`
@@ -906,12 +925,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - `backend/app/services/autonomous_task_store.py`
 - `backend/app/services/context_selection.py`
 - `backend/app/services/model_reliability.py`
+- `backend/app/services/git_status.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
 - `backend/tests/test_autonomous_task_api.py`
 - `backend/tests/test_context_selection.py`
 - `backend/tests/test_coder_dry_run_api.py`
 - `backend/tests/test_model_reliability.py`
+- `backend/tests/test_git_status_api.py`
 - `backend/tests/test_planner_api.py`
 - `backend/tests/test_reviewer_api.py`
 - `backend/tests/test_validator_api.py`
@@ -930,14 +951,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 38 - Safe Git Diff and Status Integration.
+Recommended next task: Sprint 1 Step 39 - Controlled Git Commit Workflow.
 
 ## Next Files Likely to Change
 
-- read-only Git status/diff service
-- fixed subprocess argument arrays only
-- execution-audit comparison for unexpected Git changes
-- compact frontend Git status/diff display if useful
+- explicit controlled local Git commit workflow
+- stage only audited approved paths, never `git add .`
+- require quality-passed execution and no unsafe/unapproved files
+- persist commit audit metadata
 
 ## Do Not Forget
 
@@ -952,3 +973,4 @@ Recommended next task: Sprint 1 Step 38 - Safe Git Diff and Status Integration.
 ## Resume Instructions
 
 On resume: read this file, run `git status --short --branch`, confirm branch `main`, then continue from the read-only workspace, project-context, Planner Agent, Reviewer Agent, Validator Agent, and Planning Workflow foundation.
+- `backend/app/models/git_status.py`
