@@ -47,6 +47,7 @@ def get_coder_dry_run_agent() -> CoderDryRunAgent:
     return CoderDryRunAgent(
         ollama_service=OllamaService(settings),
         handoff_service=handoff_service,
+        workspace_service=workspace_service,
     )
 
 

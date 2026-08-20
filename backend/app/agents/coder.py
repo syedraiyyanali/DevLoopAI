@@ -20,6 +20,8 @@ from app.services.execution_handoff import (
     ExecutionHandoffBlockedError,
     ExecutionHandoffService,
 )
+from app.models.context_selection import ContextSelectionRequest
+from app.services.context_selection import ContextSelectionService
 from app.services.execution_store import ExecutionStore
 from app.services.ollama import OllamaService, OllamaServiceError
 from app.services.workspace import (
@@ -52,9 +54,15 @@ class CoderDryRunAgent:
         *,
         ollama_service: OllamaService,
         handoff_service: ExecutionHandoffService,
+        workspace_service: WorkspaceService | None = None,
     ) -> None:
         self.ollama_service = ollama_service
         self.handoff_service = handoff_service
+        self.context_selector = (
+            ContextSelectionService(workspace_service)
+            if workspace_service is not None
+            else None
+        )
 
     async def dry_run(self, request: CoderDryRunRequest) -> CoderDryRunResponse:
         """
@@ -71,7 +79,11 @@ class CoderDryRunAgent:
             canonical=canonical_handoff,
         )
 
-        prompt = self._build_prompt(canonical_handoff, request.retry_context)
+        context_selection = request.context_selection or self._select_context(
+            canonical_handoff,
+            request,
+        )
+        prompt = self._build_prompt(canonical_handoff, request.retry_context, context_selection)
 
         try:
             model_response = await self.ollama_service.generate_chat_response(
@@ -109,6 +121,7 @@ class CoderDryRunAgent:
                     *model_payload.rollback_backup_plan,
                 ]
             ),
+            context_selection=context_selection,
             warnings=self._unique([*canonical_handoff.warnings, *model_payload.warnings]),
             blockers=[],
             model=model_response.model,
@@ -202,9 +215,15 @@ class CoderDryRunAgent:
         self,
         handoff: ExecutionHandoffResponse,
         retry_context: dict | None = None,
+        context_selection=None,
     ) -> str:
         safe_handoff_payload = handoff.model_dump(mode="json")
         safe_retry_context = {} if retry_context is None else retry_context
+        safe_context = (
+            {}
+            if context_selection is None
+            else context_selection.model_dump(mode="json")
+        )
 
         return (
             "You are DevLoopAI's zero-write Coding Agent dry-run simulator. "
@@ -241,7 +260,10 @@ class CoderDryRunAgent:
             f"{json.dumps(safe_handoff_payload, ensure_ascii=True)}\n\n"
             "Retry failure context, if present. Use it only to improve the new proposal; "
             "do not expose secrets or claim execution:\n"
-            f"{json.dumps(safe_retry_context, ensure_ascii=True)}"
+            f"{json.dumps(safe_retry_context, ensure_ascii=True)}\n\n"
+            "Bounded selected project context. Treat it as read-only reference material; "
+            "do not propose files outside allowed_files:\n"
+            f"{json.dumps(safe_context, ensure_ascii=True)}"
         )
 
     def _parse_model_payload(self, raw_response: str) -> CoderDryRunModelPayload:
@@ -347,6 +369,23 @@ class CoderDryRunAgent:
             unique_values.append(normalized_value)
 
         return unique_values
+
+    def _select_context(
+        self,
+        handoff: ExecutionHandoffResponse,
+        request: CoderDryRunRequest,
+    ):
+        if self.context_selector is None:
+            return None
+        return self.context_selector.select(
+            ContextSelectionRequest(
+                workspace_path=handoff.workspace_path,
+                task=" ".join(handoff.approved_planned_changes),
+                planned_paths=handoff.allowed_files,
+                max_files=12,
+                max_total_bytes=48 * 1024,
+            )
+        )
 
 
 class CoderDiffPreviewAgent:

@@ -9,9 +9,9 @@ Updated By: Codex
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 35 bounded autonomous task mode
-Working Tree: clean after Step 35 feature commit
-Last Push: Step 35 checkpoint pushed to origin/main
+Latest Commit: Step 36 multi-file context selection
+Working Tree: clean after Step 36 feature commit
+Last Push: Step 36 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 35: Bounded Autonomous Task Mode
+Step: Sprint 1 - Step 36: Multi-File Coding Improvements and Better Context Selection
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 35 bounded autonomous task mode completed, verified, committed, and pushed.
+Step 36 multi-file coding improvements and context selection completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 35 checkpoint with Sprint 1 Step 36.
+Continue from the verified Step 36 checkpoint with Sprint 1 Step 37.
 
 ## What Has Been Completed
 
@@ -726,6 +726,24 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 35 approval-boundary tests: PASS; continuing before plan approval did not prepare execution, and continuing after plan approval prepared a diff but stopped before mutation approval.
 - Step 35 retry integration tests: PASS; autonomous continue prepared retry after quality failure without hidden mutation and respected retry terminal state.
 - Step 35 restart persistence test: PASS; autonomous session reloaded from SQLite after store reinitialization.
+- Added deterministic `ContextSelectionService` for bounded project-aware coding context.
+- Added context-selection schemas for selected files, skipped files, reasons, truncation, total bytes, file budget, byte budget, warnings, and workspace path.
+- Context selection considers approved planned paths, related tests, important config files, likely entry points, task-text path matches, and common source/test/config conventions.
+- Context selection reads files only through `WorkspaceService`, preserving traversal, secret, ignored/generated, binary, UTF-8, and size protections.
+- Context selection enforces hard budgets: default 12 files, 48 KiB total, and 16 KiB per file.
+- Dry-run prompts now include bounded selected context as read-only reference material while still forbidding files outside `allowed_files`.
+- `CoderDryRunResponse` now returns `context_selection` so audit/UI can show which context was provided and what was skipped.
+- Multi-file dry-run remains constrained by handoff `allowed_files`; the model cannot add undeclared files outside the approved handoff.
+- Frontend dry-run card now shows selected context files, reasons, skipped files, warnings, and byte budget.
+- Step 36 focused context/dry-run tests: PASS, `13 passed`.
+- Step 36 focused mutation/task regression tests: PASS, `34 passed`.
+- Step 36 Python compile check: PASS.
+- Step 36 full backend pytest: PASS, `214 passed`.
+- Step 36 frontend ESLint: PASS.
+- Step 36 frontend production build: PASS.
+- Step 36 route render smoke check: PASS; Next.js production route returned HTTP 200.
+- Step 36 multi-file coverage: PASS; approved two-file handoff returned a two-file dry-run and selected both approved files as context.
+- Step 36 safety coverage: PASS; context tests exclude `.env` and `node_modules`, enforce file count limits, and truncate oversized context content.
 
 ## Known Problems
 
@@ -747,6 +765,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 33 controlled single-task execution workflow is verified, committed, and pushed.
 - Step 34 bounded improve-and-retry loop is verified, committed, and pushed.
 - Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
+- Step 36 multi-file context selection is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -811,6 +830,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 34 preserves the same explicit mutation approval boundary for retry attempts; retry preparation creates a new reviewed diff only.
 - Step 34 fixed the retry/preflight interaction by making retry evaluate the current failed execution audit instead of requiring the original pre-mutation project preflight to still match after an intentional failed mutation.
 - Step 35 adds safe autonomous coordination without adding hidden mutation, hidden rollback, generic shell execution, dependency installation, Git operations, deployment, or autonomous mutation approval.
+- Step 36 fixed a deterministic test fixture mismatch: adding a second TypeScript fixture file required updating the planner context language count from 1 to 2, because preflight correctly detected the project-context change.
 
 ## Git Commits From Recent Work
 
@@ -829,7 +849,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 32 - feat: add deterministic execution quality gate
 - Step 33 - feat: add controlled task execution workflow
 - 37517e0 - feat: add bounded task retry workflow
-- Step 35 - pending commit: feat: add bounded autonomous task mode
+- bb901a0 - feat: add bounded autonomous task mode
+- Step 36 - pending commit: feat: add bounded coding context selection
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -856,17 +877,22 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 - `backend/app/api/v1/endpoints/task_execution.py`
 - `backend/app/api/v1/endpoints/autonomous_task.py`
+- `backend/app/api/v1/endpoints/coder.py`
 - `backend/app/api/v1/router.py`
 - `backend/app/agents/coder.py`
 - `backend/app/models/autonomous_task.py`
+- `backend/app/models/context_selection.py`
 - `backend/app/models/coder.py`
 - `backend/app/models/execution_mutation.py`
 - `backend/app/models/task_execution.py`
 - `backend/app/services/autonomous_task.py`
 - `backend/app/services/autonomous_task_store.py`
+- `backend/app/services/context_selection.py`
 - `backend/app/services/execution_mutation.py`
 - `backend/app/services/task_execution.py`
 - `backend/tests/test_autonomous_task_api.py`
+- `backend/tests/test_context_selection.py`
+- `backend/tests/test_coder_dry_run_api.py`
 - `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
 - `frontend/lib/api-client.ts`
@@ -882,14 +908,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 36 - Multi-File Coding Improvements and Better Context Selection.
+Recommended next task: Sprint 1 Step 37 - Model Reliability and Structured-Output Recovery.
 
 ## Next Files Likely to Change
 
-- deterministic project-aware context selection
-- bounded selected-file context for coding proposals
-- stronger multi-file dry-run/diff/apply coverage
-- multi-file stale and transactional rollback tests
+- central model reliability/structured-output handling
+- bounded regeneration attempts
+- model unavailable/CUDA classification
+- safe metadata logging without secrets or giant raw outputs
 
 ## Do Not Forget
 

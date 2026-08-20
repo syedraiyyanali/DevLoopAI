@@ -331,6 +331,26 @@ export interface CoderDryRunOperation {
   rationale: string;
 }
 
+export interface SelectedContextFile {
+  relative_path: string;
+  reason: string;
+  content: string | null;
+  size_bytes: number | null;
+  truncated: boolean;
+  skipped: boolean;
+  warning: string | null;
+}
+
+export interface ContextSelectionResponse {
+  workspace_path: string;
+  selected_files: SelectedContextFile[];
+  skipped_files: SelectedContextFile[];
+  total_bytes: number;
+  max_files: number;
+  max_total_bytes: number;
+  warnings: string[];
+}
+
 export interface CoderDryRunResponse {
   workflow_id: string;
   approved_plan_fingerprint: string;
@@ -343,6 +363,7 @@ export interface CoderDryRunResponse {
   dependencies_required: string[];
   tests_to_run: string[];
   rollback_backup_plan: string[];
+  context_selection: ContextSelectionResponse | null;
   warnings: string[];
   blockers: string[];
   model: string;

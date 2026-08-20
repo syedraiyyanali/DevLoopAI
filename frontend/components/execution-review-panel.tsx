@@ -1446,6 +1446,29 @@ function DryRunCard({ dryRun }: { dryRun: CoderDryRunResponse }) {
         )}
       />
       <ListBlock label="Tests to run" values={dryRun.tests_to_run} />
+      {dryRun.context_selection ? (
+        <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase text-zinc-500">Selected context</p>
+          <HashRow
+            label="Budget"
+            value={`${dryRun.context_selection.total_bytes} of ${dryRun.context_selection.max_total_bytes} bytes`}
+          />
+          <ListBlock
+            label="Files"
+            values={dryRun.context_selection.selected_files.map(
+              (file) =>
+                `${file.relative_path}: ${file.reason}${file.truncated ? " (truncated)" : ""}`,
+            )}
+          />
+          <ListBlock
+            label="Skipped"
+            values={dryRun.context_selection.skipped_files.map(
+              (file) => `${file.relative_path}: ${file.warning ?? file.reason}`,
+            )}
+          />
+          <ListBlock label="Context warnings" values={dryRun.context_selection.warnings} />
+        </div>
+      ) : null}
       <ListBlock label="Warnings" values={dryRun.warnings} />
       <ListBlock label="Blockers" values={dryRun.blockers} />
     </ResultCard>

@@ -52,6 +52,7 @@ def get_autonomous_task_service() -> BoundedAutonomousTaskService:
         dry_run_agent=CoderDryRunAgent(
             ollama_service=ollama_service,
             handoff_service=handoff_service,
+            workspace_service=workspace_service,
         ),
         diff_preview_agent=CoderDiffPreviewAgent(
             ollama_service=ollama_service,

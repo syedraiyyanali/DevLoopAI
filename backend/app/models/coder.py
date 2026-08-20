@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from app.models.context_selection import ContextSelectionResponse
 from app.models.execution_handoff import AllowedOperationType, ExecutionHandoffResponse
 
 
@@ -10,6 +11,7 @@ class CoderDryRunRequest(BaseModel):
     handoff: ExecutionHandoffResponse
     model: str | None = None
     retry_context: dict | None = None
+    context_selection: ContextSelectionResponse | None = None
 
 
 class CoderDryRunOperation(BaseModel):
@@ -53,6 +55,7 @@ class CoderDryRunResponse(BaseModel):
     dependencies_required: list[str] = Field(default_factory=list)
     tests_to_run: list[str] = Field(default_factory=list)
     rollback_backup_plan: list[str] = Field(default_factory=list)
+    context_selection: ContextSelectionResponse | None = None
     warnings: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
     model: str

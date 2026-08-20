@@ -45,6 +45,7 @@ def get_task_execution_service() -> ControlledTaskExecutionService:
         dry_run_agent=CoderDryRunAgent(
             ollama_service=OllamaService(settings),
             handoff_service=handoff_service,
+            workspace_service=workspace_service,
         ),
         diff_preview_agent=CoderDiffPreviewAgent(
             ollama_service=OllamaService(settings),

@@ -68,6 +68,7 @@ def dry_run_context(tmp_path, monkeypatch):
                 error=context["ollama_error"],
             ),
             handoff_service=handoff_service,
+            workspace_service=workspace_service,
         )
 
     monkeypatch.setattr(coder_endpoint, "get_coder_dry_run_agent", get_agent)
@@ -83,6 +84,7 @@ def create_workspace(tmp_path):
         encoding="utf-8",
     )
     (source_dir / "app.ts").write_text("export const status = 'ready';\n", encoding="utf-8")
+    (source_dir / "helper.ts").write_text("export const helper = true;\n", encoding="utf-8")
     return workspace
 
 
@@ -94,7 +96,7 @@ def planner_response(paths=None) -> PlannerResponse:
             workspace_name="sample-project",
             project_types=["Node.js"],
             frameworks=["Next.js"],
-            languages={"TypeScript": 1},
+            languages={"TypeScript": 2},
         ),
         implementation_steps=["Inspect src/app.ts.", "Add the status label."],
         files_likely_to_change=paths if paths is not None else ["src/app.ts"],
@@ -217,8 +219,54 @@ def test_coder_dry_run_returns_zero_write_result(tmp_path, dry_run_context):
     assert body["files_would_delete"] == []
     assert body["intended_operations"][0]["operation_type"] == "modify_text_file"
     assert "Run frontend lint." in body["tests_to_run"]
+    assert body["context_selection"]["selected_files"]
+    assert body["context_selection"]["selected_files"][0]["relative_path"] == "src/app.ts"
     assert body["execution_performed"] is False
     assert body["mutation_capabilities_enabled"] is False
+
+
+def test_coder_dry_run_supports_multi_file_approved_context(tmp_path, dry_run_context):
+    workspace = create_workspace(tmp_path)
+    handoff = create_approved_handoff(
+        dry_run_context,
+        workspace,
+        paths=["src/app.ts", "src/helper.ts"],
+    )
+    dry_run_context["ollama_payload"] = {
+        "files_to_modify": ["src/app.ts", "src/helper.ts"],
+        "files_to_create": [],
+        "files_to_delete": [],
+        "intended_operations": [
+            {
+                "operation_type": "modify_text_file",
+                "relative_path": "src/app.ts",
+                "description": "Update status usage.",
+                "rationale": "Approved file.",
+            },
+            {
+                "operation_type": "modify_text_file",
+                "relative_path": "src/helper.ts",
+                "description": "Update helper export.",
+                "rationale": "Approved related file.",
+            },
+        ],
+        "proposed_code_change_summary": "Would update two approved TypeScript files.",
+        "dependencies_required": [],
+        "tests_to_run": ["Run frontend lint."],
+        "rollback_backup_plan": ["Restore original contents."],
+        "warnings": [],
+        "blockers": [],
+    }
+
+    response = post_dry_run(handoff)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["files_would_modify"] == ["src/app.ts", "src/helper.ts"]
+    selected_paths = {
+        item["relative_path"] for item in body["context_selection"]["selected_files"]
+    }
+    assert {"src/app.ts", "src/helper.ts"}.issubset(selected_paths)
 
 
 def test_coder_dry_run_blocks_stale_handoff(tmp_path, dry_run_context):
