@@ -3,15 +3,15 @@
 ## Last Updated
 
 Date: 2026-08-22
-Time: 14:27:45 +05:00
+Time: 14:35:50 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Simplified chat-first frontend UI
-Working Tree: clean after UI simplification commit
-Last Push: UI simplification checkpoint pushed to origin/main
+Latest Commit: Improve coding chat prompts and saved sessions
+Working Tree: clean after coding chat session commit
+Last Push: coding chat session checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -21,17 +21,17 @@ Release Decision: SPRINT 1 COMPLETE
 
 ## Current Step
 
-Step: Post-Sprint 1 UI Simplification
+Step: Post-Sprint 1 Chat Usability Update
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Chat-first frontend UI simplification completed, verified, committed, and pushed.
+Coding/plugin chat prompts and saved session behavior completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Sprint 1 is complete. The current post-Sprint work simplifies the interface into a chat-first assistant layout while keeping advanced tools available behind expandable sections. Do not begin Sprint 2 automatically.
+Sprint 1 is complete. The current post-Sprint work makes the chat easier for coding/plugin requests and saves the current chat session in the browser. Do not begin Sprint 2 automatically.
 
 ## What Has Been Completed
 
@@ -887,6 +887,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - UI simplification frontend ESLint: PASS.
 - UI simplification frontend production build: PASS.
 - UI simplification route smoke: PASS, HTTP 200 returned on port `3111`; route output contained `What do you want to build?` and advanced section labels.
+- Updated the chat panel to be easier for coding work, plugin planning, and debugging.
+- Replaced generic starter prompts with focused prompt cards: `Write code`, `Create plugin`, and `Fix bug`.
+- Added browser-local saved chat session behavior using `localStorage`, with validation for saved message shape and automatic clearing when the user clears the conversation.
+- Added visible saved-session copy so users understand the current chat persists after refresh in the same browser.
+- Preserved all existing streaming chat, non-streaming fallback, Clear button, error handling, and backend-only Ollama access.
+- Chat usability frontend ESLint: PASS.
+- Chat usability frontend production build: PASS.
+- Chat usability route smoke: PASS, HTTP 200 returned on port `3112`; route output contained `Write code`, `Create plugin`, and `Saved chat`.
 
 ## Known Problems
 
@@ -1040,7 +1048,6 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `frontend/app/page.tsx`
 - `frontend/components/chat-panel.tsx`
 - `CODEX_WORKING_DETAILS.md`
 

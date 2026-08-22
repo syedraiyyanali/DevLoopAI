@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
@@ -20,20 +20,93 @@ type ChatStatus =
   | { status: "sending" }
   | { status: "error"; message: string };
 
+const chatStorageKey = "devloopai.chatSession.v1";
+
 const exampleMessages = [
-  "What can you help me build?",
-  "Check if DevLoopAI is connected.",
-  "Write a tiny HTML button.",
+  {
+    title: "Write code",
+    prompt:
+      "Write clean code for this feature and explain where each file should go: ",
+  },
+  {
+    title: "Create plugin",
+    prompt:
+      "Help me design and build a complete plugin. Start by asking what platform, features, files, settings, and tests are needed.",
+  },
+  {
+    title: "Fix bug",
+    prompt:
+      "Help me debug this issue. Ask for the error, relevant files, expected behavior, and then propose a safe fix.",
+  },
 ];
+
+function loadSavedMessages(): ChatMessage[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const savedChat = window.localStorage.getItem(chatStorageKey);
+
+    if (!savedChat) {
+      return [];
+    }
+
+    const parsedMessages = JSON.parse(savedChat);
+
+    return isValidSavedMessages(parsedMessages) ? parsedMessages : [];
+  } catch {
+    window.localStorage.removeItem(chatStorageKey);
+    return [];
+  }
+}
+
+function isValidSavedMessages(value: unknown): value is ChatMessage[] {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  return value.every(
+    (item) =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as ChatMessage).id === "number" &&
+      ((item as ChatMessage).role === "user" ||
+        (item as ChatMessage).role === "assistant") &&
+      typeof (item as ChatMessage).content === "string" &&
+      ((item as ChatMessage).model === undefined ||
+        typeof (item as ChatMessage).model === "string"),
+  );
+}
 
 export default function ChatPanel() {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(loadSavedMessages);
   const [chatStatus, setChatStatus] = useState<ChatStatus>({ status: "idle" });
 
-  const nextMessageId = useMemo(() => messages.length + 1, [messages.length]);
+  const nextMessageId = useMemo(
+    () =>
+      messages.reduce(
+        (highestId, chatMessage) => Math.max(highestId, chatMessage.id),
+        0,
+      ) + 1,
+    [messages],
+  );
   const isSending = chatStatus.status === "sending";
   const canSend = message.trim().length > 0 && !isSending;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isSending) {
+      return;
+    }
+
+    if (messages.length === 0) {
+      window.localStorage.removeItem(chatStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(chatStorageKey, JSON.stringify(messages));
+  }, [isSending, messages]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,6 +197,7 @@ export default function ChatPanel() {
 
     setMessages([]);
     setMessage("");
+    window.localStorage.removeItem(chatStorageKey);
     setChatStatus({ status: "idle" });
   }
 
@@ -176,6 +250,9 @@ export default function ChatPanel() {
       <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="text-sm font-medium text-zinc-500">Chat</h2>
+          <p className="text-xs text-zinc-400">
+            Current chat saves automatically in this browser.
+          </p>
         </div>
 
         <button
@@ -204,11 +281,16 @@ export default function ChatPanel() {
                 <button
                   className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left text-sm text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
                   disabled={isSending}
-                  key={exampleMessage}
-                  onClick={() => selectExample(exampleMessage)}
+                  key={exampleMessage.title}
+                  onClick={() => selectExample(exampleMessage.prompt)}
                   type="button"
                 >
-                  {exampleMessage}
+                  <span className="block font-medium text-zinc-950">
+                    {exampleMessage.title}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                    {exampleMessage.prompt}
+                  </span>
                 </button>
               ))}
             </div>
@@ -290,7 +372,9 @@ export default function ChatPanel() {
         />
 
         <div className="flex items-center justify-between gap-3 px-2 pb-1">
-          <p className="text-xs text-zinc-400">Local Ollama via FastAPI</p>
+          <p className="text-xs text-zinc-400">
+            Saved chat - Local Ollama via FastAPI
+          </p>
           <button
             className="inline-flex h-9 w-fit items-center justify-center rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             disabled={!canSend}
