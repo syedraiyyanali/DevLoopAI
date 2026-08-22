@@ -32,6 +32,7 @@ class GitStatusResponse(BaseModel):
     current_branch: str | None = None
     changed_files: list[GitChangedFile] = Field(default_factory=list)
     changed_file_count: int = 0
+    restricted_changed_file_count: int = 0
     staged_files: list[str] = Field(default_factory=list)
     unstaged_files: list[str] = Field(default_factory=list)
     untracked_files: list[str] = Field(default_factory=list)

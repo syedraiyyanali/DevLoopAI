@@ -94,6 +94,24 @@ def test_git_diff_is_bounded(tmp_path, monkeypatch):
     assert body["diff_truncated"] is True
 
 
+def test_git_status_hides_restricted_changed_file_diff(tmp_path, monkeypatch):
+    configure_service(tmp_path, monkeypatch)
+    workspace = make_repo(tmp_path)
+    (workspace / ".env").write_text("API_KEY=secret-one\n", encoding="utf-8")
+    run_git(workspace, ["add", ".env"])
+    run_git(workspace, ["commit", "-m", "add env fixture"])
+    (workspace / ".env").write_text("API_KEY=secret-two\n", encoding="utf-8")
+
+    body = post_status(workspace, max_diff_chars=1000).json()
+
+    assert body["restricted_changed_file_count"] == 1
+    assert body["changed_files"] == []
+    assert body["diff_excerpt"] == ""
+    assert body["diff_summary"] == ""
+    assert "secret-two" not in str(body)
+    assert any("restricted changed file" in warning for warning in body["warnings"])
+
+
 def test_execution_audit_comparison_surfaces_unexpected_changes(tmp_path, monkeypatch):
     execution_store = configure_service(tmp_path, monkeypatch)
     workspace = make_repo(tmp_path)

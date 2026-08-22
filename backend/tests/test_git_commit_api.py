@@ -197,6 +197,18 @@ def test_commit_blocks_unexpected_changed_files(tmp_path, monkeypatch):
     assert "Unexpected changed files" in body["blockers"][0]
 
 
+def test_commit_blocks_when_restricted_files_changed(tmp_path, monkeypatch):
+    store = configure_service(tmp_path, monkeypatch)
+    workspace = make_repo(tmp_path)
+    create_quality_passed_execution(store, workspace)
+    (workspace / ".env").write_text("API_KEY=secret\n", encoding="utf-8")
+
+    body = post_commit("exec-1").json()
+
+    assert body["status"] == "BLOCKED"
+    assert "Restricted changed files" in body["blockers"][0]
+
+
 def test_commit_message_is_sanitized(tmp_path, monkeypatch):
     store = configure_service(tmp_path, monkeypatch)
     workspace = make_repo(tmp_path)
@@ -206,6 +218,20 @@ def test_commit_message_is_sanitized(tmp_path, monkeypatch):
 
     assert body["status"] == "COMMITTED"
     assert body["message"] == "feat: update malicious"
+
+
+def test_commit_bypasses_repository_hooks(tmp_path, monkeypatch):
+    store = configure_service(tmp_path, monkeypatch)
+    workspace = make_repo(tmp_path)
+    create_quality_passed_execution(store, workspace)
+    hook = workspace / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="\n")
+    hook.chmod(0o755)
+
+    body = post_commit("exec-1", "feat: hook bypass").json()
+
+    assert body["status"] == "COMMITTED"
+    assert run_git(workspace, ["log", "-1", "--pretty=%s"]).stdout.strip() == "feat: hook bypass"
 
 
 def test_duplicate_commit_returns_existing_audit_without_new_commit(tmp_path, monkeypatch):

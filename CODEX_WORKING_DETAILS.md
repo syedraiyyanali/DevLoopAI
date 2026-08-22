@@ -3,33 +3,35 @@
 ## Last Updated
 
 Date: 2026-08-22
-Time: 13:13:40 +05:00
+Time: 13:27:24 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 42 failure recovery and resume handling
-Working Tree: clean after Step 42 feature commit
-Last Push: Step 42 checkpoint pushed to origin/main
+Latest Commit: Step 43 Sprint 1 release candidate hardening
+Working Tree: clean after Step 43 release-candidate commit
+Last Push: Step 43 checkpoint pushed to origin/main
 
 ## Current Sprint
 
 Sprint: Sprint 1 - Controlled Single-Task Execution
 
+Release Decision: SPRINT 1 COMPLETE
+
 ## Current Step
 
-Step: Sprint 1 - Step 42: Failure Recovery and Resume Handling
+Step: Sprint 1 - Step 43: Final Hardening, Security Audit, Full Regression, and Release Candidate
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 42 failure recovery and resume handling completed, verified, committed, and pushed.
+Step 43 final Sprint 1 hardening, security audit, full regression, and release-candidate documentation completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 42 checkpoint with Sprint 1 Step 43.
+Sprint 1 is complete based on the Step 43 security audit, full regression, frontend verification, route smoke, Ollama smoke, and disposable E2E scenario coverage. Do not begin Sprint 2 automatically.
 
 ## What Has Been Completed
 
@@ -853,6 +855,23 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 42 frontend ESLint: PASS.
 - Step 42 frontend production build: PASS.
 - Step 42 route render smoke: HTTP 200 returned on port `3109`; the PowerShell cleanup wrapper returned non-zero after successful HTTP 200 due the same Windows child-process cleanup behavior observed in Step 41, and no test listener remained afterward.
+- Completed Sprint 1 Step 43 final hardening and release-candidate audit.
+- Hardened workspace listing/context visibility so symlink or junction paths that resolve outside the selected workspace are hidden before metadata or context summaries are returned.
+- Hardened read-only Git status so restricted changed files are hidden, counted, and cause full diff output to be suppressed rather than exposing secret-file contents.
+- Hardened controlled Git commit so restricted changed files block commit eligibility.
+- Hardened controlled Git commit to use `git commit --no-verify`, preventing repository hooks from executing during DevLoopAI's controlled local commit action.
+- Added focused regressions for escaped symlink visibility, restricted Git diff suppression, restricted-file commit blocking, and hook-bypass commit behavior.
+- Expanded README from a stub into Sprint 1 release-candidate documentation covering architecture, workflow, setup, testing, safety guarantees, and known limitations.
+- Step 43 focused workspace/Git hardening tests: PASS, `27 passed`, `2 skipped` for unavailable symlink creation.
+- Step 43 focused Git hardening tests: PASS, `12 passed`.
+- Step 43 focused Sprint 1 safety sweep: PASS, `114 passed`, `2 skipped`.
+- Step 43 full backend pytest regression: PASS, `245 passed`, `2 skipped`.
+- Step 43 Python compile check: PASS.
+- Step 43 frontend ESLint: PASS.
+- Step 43 frontend production build: PASS.
+- Step 43 route render smoke: PASS, HTTP 200 returned on port `3110`.
+- Step 43 direct Ollama generation smoke: PASS with `qwen2.5-coder:7b`, response `DevLoopAI Sprint 1 OK`.
+- Step 43 disposable E2E release scenarios A-H are covered by freshly rerun focused tests: happy path, failed change plus retry, retry limit, rollback, stale reviewed diff, multi-file rollback, Git safety, and restart/recovery.
 
 ## Known Problems
 
@@ -873,14 +892,15 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 32 deterministic execution quality gate is verified, committed, and pushed.
 - Step 33 controlled single-task execution workflow is verified, committed, and pushed.
 - Step 34 bounded improve-and-retry loop is verified, committed, and pushed.
-- Step 35 bounded autonomous task mode is verified locally and ready to commit/push.
-- Step 36 multi-file context selection is verified locally and ready to commit/push.
-- Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
+- Step 35 bounded autonomous task mode is verified, committed, and pushed.
+- Step 36 multi-file context selection is verified, committed, and pushed.
+- Step 37 model reliability and structured-output recovery is verified, committed, and pushed.
 - Step 38 safe Git diff/status integration is verified, committed, and pushed.
 - Step 39 controlled Git commit workflow is verified, committed, and pushed.
 - Step 40 better test selection and validation strategy is verified, committed, and pushed.
 - Step 41 frontend polish and task progress UX is verified, committed, and pushed.
 - Step 42 failure recovery and resume handling is verified, committed, and pushed.
+- Step 43 final hardening and Sprint 1 release-candidate audit is verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -980,6 +1000,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - e7d4c8b - feat: add verification selection policy
 - 7227af1 - feat: polish execution progress UX
 - Step 42 - feat: add task recovery resume handling
+- Step 43 - fix: harden sprint 1 release candidate
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -1004,16 +1025,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/task_execution.py`
-- `backend/app/models/task_recovery.py`
-- `backend/app/services/task_recovery.py`
-- `backend/app/services/task_execution.py`
+- `README.md`
+- `backend/app/models/git_status.py`
 - `backend/app/services/git_commit.py`
-- `backend/tests/test_task_recovery_api.py`
-- `backend/tests/test_task_execution_api.py`
+- `backend/app/services/git_status.py`
+- `backend/app/services/workspace.py`
 - `backend/tests/test_git_commit_api.py`
-- `frontend/components/execution-review-panel.tsx`
-- `frontend/lib/api-client.ts`
+- `backend/tests/test_git_status_api.py`
+- `backend/tests/test_workspace_api.py`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -1026,14 +1045,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 43 - Final Hardening, Security Audit, Full Regression, and Sprint 1 Release Candidate.
+Recommended next milestone: Sprint 2 planning. Do not begin Sprint 2 automatically.
 
 ## Next Files Likely to Change
 
-- security audit of mutation, verification, retry, recovery, and Git commit boundaries
-- full regression and smoke-test sweep
-- documentation cleanup for Sprint 1 release candidate
-- verify no secrets/runtime databases/snapshots are tracked
+- Sprint 2 roadmap/planning documentation
+- repository indexing or semantic context services
+- optional specialist-agent foundations
+- browser/visual verification hardening
 
 ## Do Not Forget
 

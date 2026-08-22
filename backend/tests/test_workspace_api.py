@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -347,6 +350,46 @@ def test_context_ignores_generated_and_secret_files(tmp_path):
     assert ".env" not in serialized_body
     assert ".env.local" not in serialized_body
     assert body["detected_languages"]["Python"] == 2
+
+
+def test_list_workspace_hides_symlink_that_escapes_root(tmp_path):
+    workspace = create_workspace(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("outside secret\n", encoding="utf-8")
+    link = workspace / "outside-link"
+    try:
+        os.symlink(outside, link, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"Symlink creation is unavailable in this environment: {exc}")
+
+    body = client.post(
+        "/api/v1/workspace/list",
+        json={"workspace_path": str(workspace), "relative_path": ""},
+    ).json()
+
+    assert "outside-link" not in {entry["name"] for entry in body["entries"]}
+
+
+def test_context_hides_symlink_that_escapes_root(tmp_path):
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "external.py").write_text("SECRET = 'outside'\n", encoding="utf-8")
+    try:
+        os.symlink(outside / "external.py", workspace / "external.py")
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"Symlink creation is unavailable in this environment: {exc}")
+
+    body = client.post(
+        "/api/v1/workspace/context",
+        json={"workspace_path": str(workspace)},
+    ).json()
+
+    assert body["file_count"] == 0
+    assert "Python" not in body["detected_languages"]
+    assert "external.py" not in str(body)
 
 
 def test_context_rejects_invalid_workspace_path(tmp_path):

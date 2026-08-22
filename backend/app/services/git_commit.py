@@ -142,6 +142,12 @@ class ControlledGitCommitService:
                 execution,
                 ["Unexpected changed files are present: " + ", ".join(git_status.unexpected_changed_files)],
             )
+        if git_status.restricted_changed_file_count:
+            return self._blocked(
+                request,
+                execution,
+                ["Restricted changed files are present and must be resolved before commit."],
+            )
 
         for relative_path in audited_files:
             self.workspace_service._resolve_child_path(root, relative_path)
@@ -151,7 +157,7 @@ class ControlledGitCommitService:
             return self._failed(request, execution, audited_files, "Git add failed.")
 
         message = self._commit_message(request.message, execution.workflow_id)
-        commit_result = self._run(root, ["commit", "-m", message])
+        commit_result = self._run(root, ["commit", "--no-verify", "-m", message])
         if commit_result.returncode != 0:
             return self._failed(
                 request,

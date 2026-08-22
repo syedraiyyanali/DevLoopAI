@@ -40,7 +40,15 @@ class GitStatusService:
         if porcelain.returncode != 0:
             blockers.append("Git status could not be read.")
 
-        changed_files = self._parse_porcelain(porcelain.stdout)
+        all_changed_files = self._parse_porcelain(porcelain.stdout)
+        changed_files = [
+            item for item in all_changed_files if self._is_safe_git_path(root, item.relative_path)
+        ]
+        restricted_count = len(all_changed_files) - len(changed_files)
+        if restricted_count:
+            warnings.append(
+                f"{restricted_count} restricted changed file(s) were hidden by workspace safety policy."
+            )
         staged = [
             item.relative_path
             for item in changed_files
@@ -52,10 +60,16 @@ class GitStatusService:
             if item.worktree_status not in {" ", "?"}
         ]
         untracked = [item.relative_path for item in changed_files if item.index_status == "?"]
-        diff_summary = self._run(root, ["diff", "--stat"]).stdout
-        diff = self._run(root, ["diff", "--", "."]).stdout
-        diff_excerpt = diff[: request.max_diff_chars]
-        diff_truncated = len(diff) > request.max_diff_chars
+        if restricted_count:
+            diff_summary = ""
+            diff_excerpt = ""
+            diff_truncated = False
+            warnings.append("Diff output was suppressed because restricted files have changes.")
+        else:
+            diff_summary = self._run(root, ["diff", "--no-ext-diff", "--no-textconv", "--stat"]).stdout
+            diff = self._run(root, ["diff", "--no-ext-diff", "--no-textconv", "--", "."]).stdout
+            diff_excerpt = diff[: request.max_diff_chars]
+            diff_truncated = len(diff) > request.max_diff_chars
         recent_commits = self._recent_commits(root)
         audit_files = self._execution_audit_files(request.execution_id)
         unexpected = []
@@ -71,6 +85,7 @@ class GitStatusService:
             current_branch=branch,
             changed_files=changed_files,
             changed_file_count=len(changed_files),
+            restricted_changed_file_count=restricted_count,
             staged_files=staged,
             unstaged_files=unstaged,
             untracked_files=untracked,
@@ -114,6 +129,13 @@ class GitStatusService:
                 )
             )
         return files
+
+    def _is_safe_git_path(self, root: Path, relative_path: str) -> bool:
+        try:
+            self.workspace_service._resolve_child_path(root, relative_path)
+        except Exception:
+            return False
+        return True
 
     def _recent_commits(self, root: Path) -> list[GitCommitSummary]:
         result = self._run(root, ["log", "-5", "--pretty=format:%h%x00%s"])

@@ -178,7 +178,7 @@ class WorkspaceService:
         entries = [
             self._entry_for(root, child)
             for child in sorted(target.iterdir(), key=self._sort_key)
-            if not self._is_ignored_path(child)
+            if self._is_visible_path(root, child)
         ]
 
         return WorkspaceListResponse(
@@ -309,7 +309,7 @@ class WorkspaceService:
             name=root.name,
             root_path=str(root),
             total_visible_entries=sum(
-                1 for child in root.iterdir() if not self._is_ignored_path(child)
+                1 for child in root.iterdir() if self._is_visible_path(root, child)
             ),
         )
 
@@ -336,6 +336,30 @@ class WorkspaceService:
     def _is_ignored_path(self, path: Path) -> bool:
         return self._is_ignored_part(path.name)
 
+    def _is_visible_path(self, root: Path, path: Path) -> bool:
+        try:
+            relative_parts = path.relative_to(root).parts
+        except ValueError:
+            return False
+
+        if any(self._is_ignored_part(part) for part in relative_parts):
+            return False
+
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return False
+
+        if resolved != root and root not in resolved.parents:
+            return False
+
+        try:
+            resolved_parts = resolved.relative_to(root).parts
+        except ValueError:
+            return False
+
+        return not any(self._is_ignored_part(part) for part in resolved_parts)
+
     def _is_ignored_part(self, name: str) -> bool:
         normalized_name = name.lower()
 
@@ -355,9 +379,7 @@ class WorkspaceService:
 
     def _walk_visible(self, root: Path):
         for child in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
-            relative_parts = child.relative_to(root).parts
-
-            if any(self._is_ignored_part(part) for part in relative_parts):
+            if not self._is_visible_path(root, child):
                 continue
 
             yield child
