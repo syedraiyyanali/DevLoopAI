@@ -695,6 +695,29 @@ export interface TaskExecutionSession {
   message: string;
 }
 
+export interface TaskRecoveryResponse {
+  task_execution_id: string;
+  workflow_id: string;
+  current_task_state: string;
+  recovery_status: "RECOVERABLE" | "AWAITING_USER_ACTION" | "BLOCKED" | "COMPLETE";
+  recoverable_next_action: string;
+  completed_stages: string[];
+  interrupted_or_unknown_stages: string[];
+  blockers: string[];
+  warnings: string[];
+  approval_required: boolean;
+  mutation_already_performed: boolean;
+  rollback_available: boolean;
+  commit_state: string | null;
+  commit_hash: string | null;
+  quality_status: string | null;
+  required_verification_types: string[];
+  completed_verification_types: string[];
+  missing_verification_types: string[];
+  stale_or_corrupt_state_detected: boolean;
+  message: string;
+}
+
 type ChatStreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -1234,6 +1257,25 @@ export async function getTaskExecution(
 ): Promise<TaskExecutionSession> {
   return requestJson<TaskExecutionSession>(
     `/workflows/execution/task/${encodeURIComponent(taskExecutionId)}`,
+  );
+}
+
+export async function getTaskRecovery(
+  taskExecutionId: string,
+): Promise<TaskRecoveryResponse> {
+  return requestJson<TaskRecoveryResponse>(
+    `/workflows/execution/task/${encodeURIComponent(taskExecutionId)}/recovery`,
+  );
+}
+
+export async function resumeTaskExecution(
+  taskExecutionId: string,
+): Promise<TaskExecutionSession> {
+  return requestJson<TaskExecutionSession>(
+    `/workflows/execution/task/${encodeURIComponent(taskExecutionId)}/resume`,
+    {
+      method: "POST",
+    },
   );
 }
 

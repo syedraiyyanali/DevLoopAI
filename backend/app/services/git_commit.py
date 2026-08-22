@@ -43,6 +43,22 @@ class GitCommitStore:
             )
         return response
 
+    def latest_for_execution(self, execution_id: str) -> GitCommitResponse | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT response_json
+                FROM git_commit_audits
+                WHERE execution_id = ?
+                ORDER BY rowid DESC
+                LIMIT 1
+                """,
+                (execution_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return GitCommitResponse.model_validate(json.loads(row["response_json"]))
+
     def _initialize_database(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
@@ -93,6 +109,10 @@ class ControlledGitCommitService:
         self.workspace_service = workspace_service
 
     def commit(self, request: GitCommitRequest) -> GitCommitResponse:
+        latest_commit = self.commit_store.latest_for_execution(request.execution_id)
+        if latest_commit and latest_commit.status == "COMMITTED":
+            return latest_commit
+
         try:
             execution = self.execution_store.get_execution(request.execution_id)
         except ExecutionRecordNotFoundError as exc:

@@ -293,11 +293,13 @@ def test_explicit_apply_succeeds_and_duplicate_apply_is_blocked(tmp_path, task_c
     duplicate = client.post(
         f"/api/v1/workflows/execution/task/{task['task_execution_id']}/apply",
         json={"expected_state": "APPLIED"},
-    )
+    ).json()
 
     assert applied["state"] == "APPLIED"
     assert applied["mutation_execution_id"]
-    assert duplicate.status_code == 409
+    assert duplicate["state"] == "APPLIED"
+    assert duplicate["mutation_execution_id"] == applied["mutation_execution_id"]
+    assert workspace.joinpath("sample.py").read_text(encoding="utf-8") == "value = 2\n"
     assert workspace.joinpath("sample.py").read_text(encoding="utf-8") == "value = 2\n"
 
 

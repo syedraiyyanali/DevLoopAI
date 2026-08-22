@@ -8,14 +8,17 @@ from app.models.task_execution import (
     TaskExecutionPrepareRequest,
     TaskExecutionSession,
 )
+from app.models.task_recovery import TaskRecoveryResponse
 from app.services.execution_handoff import ExecutionHandoffService
 from app.services.execution_mutation import ExecutionMutationService
 from app.services.execution_preflight import ExecutionPreflightService
 from app.services.execution_quality import ExecutionQualityGate
 from app.services.execution_store import ExecutionRecordNotFoundError, ExecutionStore
 from app.services.execution_verification import ExecutionVerificationRunner
+from app.services.git_commit import GitCommitStore
 from app.services.ollama import OllamaService
 from app.services.planning_approval import PlanningApprovalNotFoundError, PlanningApprovalStore
+from app.services.task_recovery import TaskRecoveryService
 from app.services.task_execution import ControlledTaskExecutionService, TaskExecutionBlockedError
 from app.services.task_execution_store import TaskExecutionNotFoundError, TaskExecutionStore
 from app.services.workspace import WorkspaceService
@@ -31,6 +34,22 @@ def get_task_execution_service() -> ControlledTaskExecutionService:
     preflight_service = ExecutionPreflightService(
         approval_store=approval_store,
         workspace_service=workspace_service,
+    )
+
+
+def get_task_recovery_service() -> TaskRecoveryService:
+    approval_store = PlanningApprovalStore(settings.database_path)
+    workspace_service = WorkspaceService()
+    execution_store = ExecutionStore(settings.database_path)
+    return TaskRecoveryService(
+        task_store=TaskExecutionStore(settings.database_path),
+        approval_store=approval_store,
+        execution_store=execution_store,
+        quality_gate=ExecutionQualityGate(
+            execution_store=execution_store,
+            workspace_service=workspace_service,
+        ),
+        git_commit_store=GitCommitStore(settings.database_path),
     )
     handoff_service = ExecutionHandoffService(
         approval_store=approval_store,
@@ -84,6 +103,22 @@ async def prepare_task_execution(
 def get_task_execution(task_execution_id: str) -> TaskExecutionSession:
     try:
         return get_task_execution_service().get(task_execution_id)
+    except TaskExecutionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/{task_execution_id}/recovery", response_model=TaskRecoveryResponse)
+def recover_task_execution(task_execution_id: str) -> TaskRecoveryResponse:
+    try:
+        return get_task_recovery_service().recover(task_execution_id)
+    except TaskExecutionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/{task_execution_id}/resume", response_model=TaskExecutionSession)
+def resume_task_execution(task_execution_id: str) -> TaskExecutionSession:
+    try:
+        return get_task_recovery_service().resume(task_execution_id)
     except TaskExecutionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

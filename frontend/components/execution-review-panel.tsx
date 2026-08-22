@@ -14,12 +14,14 @@ import {
   getExecutionQuality,
   getGitStatus,
   getPlanningWorkflowHistory,
+  getTaskRecovery,
   getTaskExecution,
   listExecutionVerifications,
   listExecutionHistory,
   listPlanningWorkflowHistory,
   rollbackExecution,
   rollbackTaskExecution,
+  resumeTaskExecution,
   retryTaskExecution,
   runCoderDiffPreview,
   runCoderDryRun,
@@ -44,6 +46,7 @@ import {
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
   type TaskExecutionSession,
+  type TaskRecoveryResponse,
   type VerificationPlanCheck,
 } from "../lib/api-client";
 
@@ -62,6 +65,8 @@ type LoadingAction =
   | "task-verify"
   | "task-rollback"
   | "task-retry"
+  | "task-recovery"
+  | "task-resume"
   | "autonomous-start"
   | "autonomous-continue"
   | "autonomous-load"
@@ -103,6 +108,7 @@ export default function ExecutionReviewPanel() {
   const [executionHistoryLoading, setExecutionHistoryLoading] = useState(false);
   const [executionHistoryError, setExecutionHistoryError] = useState("");
   const [taskExecution, setTaskExecution] = useState<TaskExecutionSession | null>(null);
+  const [taskRecovery, setTaskRecovery] = useState<TaskRecoveryResponse | null>(null);
   const [taskExecutionIdInput, setTaskExecutionIdInput] = useState("");
   const [autonomousTask, setAutonomousTask] = useState<AutonomousTaskSession | null>(null);
   const [autonomousTaskText, setAutonomousTaskText] = useState("");
@@ -247,7 +253,10 @@ export default function ExecutionReviewPanel() {
     await runStep(
       "task-prepare",
       () => prepareTaskExecution(selectedWorkflow.workflow_id),
-      (result) => setTaskExecution(result),
+      (result) => {
+        setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
+      },
     );
   }
 
@@ -259,7 +268,37 @@ export default function ExecutionReviewPanel() {
     await runStep(
       "task-prepare",
       () => getTaskExecution(taskExecutionIdInput.trim()),
-      (result) => setTaskExecution(result),
+      (result) => {
+        setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
+      },
+    );
+  }
+
+  async function loadTaskRecovery(taskId = taskExecution?.task_execution_id ?? "") {
+    if (!taskId) {
+      return;
+    }
+
+    await runStep(
+      "task-recovery",
+      () => getTaskRecovery(taskId),
+      (result) => setTaskRecovery(result),
+    );
+  }
+
+  async function resumeLoadedTask() {
+    if (!taskExecution) {
+      return;
+    }
+
+    await runStep(
+      "task-resume",
+      () => resumeTaskExecution(taskExecution.task_execution_id),
+      (result) => {
+        setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
+      },
     );
   }
 
@@ -280,6 +319,7 @@ export default function ExecutionReviewPanel() {
       () => applyTaskExecution(taskExecution.task_execution_id, taskExecution.state),
       (result) => {
         setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
         void loadExecutionHistory();
         if (result.mutation_execution_id) {
           void selectExecution(result.mutation_execution_id);
@@ -298,6 +338,7 @@ export default function ExecutionReviewPanel() {
       () => verifyTaskExecution(taskExecution.task_execution_id, taskExecution.state),
       (result) => {
         setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
         void loadExecutionHistory();
         if (result.mutation_execution_id) {
           void selectExecution(result.mutation_execution_id);
@@ -323,6 +364,7 @@ export default function ExecutionReviewPanel() {
       () => rollbackTaskExecution(taskExecution.task_execution_id, taskExecution.state),
       (result) => {
         setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
         void loadExecutionHistory();
         if (result.mutation_execution_id) {
           void selectExecution(result.mutation_execution_id);
@@ -339,7 +381,10 @@ export default function ExecutionReviewPanel() {
     await runStep(
       "task-retry",
       () => retryTaskExecution(taskExecution.task_execution_id, taskExecution.state),
-      (result) => setTaskExecution(result),
+      (result) => {
+        setTaskExecution(result);
+        void loadTaskRecovery(result.task_execution_id);
+      },
     );
   }
 
@@ -383,6 +428,7 @@ export default function ExecutionReviewPanel() {
         setAutonomousTask(result);
         if (result.task_execution) {
           setTaskExecution(result.task_execution);
+          void loadTaskRecovery(result.task_execution.task_execution_id);
         }
         void loadHistory();
         void loadExecutionHistory();
@@ -814,15 +860,20 @@ export default function ExecutionReviewPanel() {
         isPreparing={loadingAction === "task-prepare"}
         isRollingBack={loadingAction === "task-rollback"}
         isRetrying={loadingAction === "task-retry"}
+        isRecovering={loadingAction === "task-recovery"}
+        isResuming={loadingAction === "task-resume"}
         isVerifying={loadingAction === "task-verify"}
         onApply={() => void applyPreparedTask()}
         onLoad={() => void loadTaskExecution()}
         onPrepare={() => void prepareSelectedTask()}
+        onRecover={() => void loadTaskRecovery()}
         onRollback={() => void rollbackTask()}
+        onResume={() => void resumeLoadedTask()}
         onRetry={() => void retryFailedTask()}
         onTaskIdChange={setTaskExecutionIdInput}
         onVerify={() => void verifyAppliedTask()}
         selectedWorkflow={selectedWorkflow}
+        taskRecovery={taskRecovery}
         taskExecution={taskExecution}
         taskExecutionIdInput={taskExecutionIdInput}
       />
@@ -1182,33 +1233,43 @@ function GitStatusSection({
 function ControlledTaskSection({
   isApplying,
   isPreparing,
+  isRecovering,
   isRollingBack,
+  isResuming,
   isRetrying,
   isVerifying,
   onApply,
   onLoad,
   onPrepare,
+  onRecover,
   onRollback,
+  onResume,
   onRetry,
   onTaskIdChange,
   onVerify,
   selectedWorkflow,
+  taskRecovery,
   taskExecution,
   taskExecutionIdInput,
 }: {
   isApplying: boolean;
   isPreparing: boolean;
+  isRecovering: boolean;
   isRollingBack: boolean;
+  isResuming: boolean;
   isRetrying: boolean;
   isVerifying: boolean;
   onApply: () => void;
   onLoad: () => void;
   onPrepare: () => void;
+  onRecover: () => void;
   onRollback: () => void;
+  onResume: () => void;
   onRetry: () => void;
   onTaskIdChange: (value: string) => void;
   onVerify: () => void;
   selectedWorkflow: PlanningWorkflowHistoryRecord | null;
+  taskRecovery: TaskRecoveryResponse | null;
   taskExecution: TaskExecutionSession | null;
   taskExecutionIdInput: string;
 }) {
@@ -1347,6 +1408,13 @@ function ControlledTaskSection({
           {taskExecution.quality_result ? (
             <QualityGateCard quality={taskExecution.quality_result} />
           ) : null}
+          <TaskRecoveryCard
+            isRecovering={isRecovering}
+            isResuming={isResuming}
+            onRecover={onRecover}
+            onResume={onResume}
+            recovery={taskRecovery}
+          />
           {taskExecution.verification_results.length > 0 ? (
             <div className="mt-4 space-y-3">
               <p className="text-xs font-semibold uppercase text-zinc-500">
@@ -1508,6 +1576,100 @@ function ExecutionHistorySection({
             </p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TaskRecoveryCard({
+  isRecovering,
+  isResuming,
+  onRecover,
+  onResume,
+  recovery,
+}: {
+  isRecovering: boolean;
+  isResuming: boolean;
+  onRecover: () => void;
+  onResume: () => void;
+  recovery: TaskRecoveryResponse | null;
+}) {
+  const canResume =
+    Boolean(recovery) &&
+    ["RECOVERABLE", "BLOCKED"].includes(recovery?.recovery_status ?? "") &&
+    !isRecovering &&
+    !isResuming;
+
+  return (
+    <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-700">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-semibold text-zinc-950">Recovery and Resume</p>
+          <p className="text-xs text-zinc-500">
+            Resume never approves, applies, rolls back, commits, or runs arbitrary commands.
+          </p>
+        </div>
+        <StatusBadge value={recovery?.recovery_status ?? "NOT_LOADED"} />
+      </div>
+      {recovery ? (
+        <>
+          <p className="mt-2">{recovery.message}</p>
+          <HashRow label="Current task state" value={recovery.current_task_state} />
+          <HashRow label="Next safe action" value={recovery.recoverable_next_action} />
+          <HashRow
+            label="Approval required"
+            value={recovery.approval_required ? "Yes" : "No"}
+          />
+          <HashRow
+            label="Mutation already performed"
+            value={recovery.mutation_already_performed ? "Yes" : "No"}
+          />
+          <HashRow
+            label="Rollback available"
+            value={recovery.rollback_available ? "Yes" : "No"}
+          />
+          <HashRow label="Quality" value={recovery.quality_status ?? "Not evaluated"} />
+          <HashRow
+            label="Commit"
+            value={
+              recovery.commit_hash
+                ? `${recovery.commit_state ?? "COMMITTED"} ${recovery.commit_hash}`
+                : recovery.commit_state ?? "No commit audit"
+            }
+          />
+          <ListBlock label="Completed stages" values={recovery.completed_stages} />
+          <ListBlock
+            label="Interrupted or unknown"
+            values={recovery.interrupted_or_unknown_stages}
+          />
+          <ListBlock label="Required checks" values={recovery.required_verification_types} />
+          <ListBlock label="Completed checks" values={recovery.completed_verification_types} />
+          <ListBlock label="Missing checks" values={recovery.missing_verification_types} />
+          <ListBlock label="Warnings" values={recovery.warnings} />
+          <ListBlock label="Blockers" values={recovery.blockers} />
+        </>
+      ) : (
+        <p className="mt-2 text-zinc-500">
+          Recovery state has not been loaded for this task session.
+        </p>
+      )}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+          disabled={isRecovering || isResuming}
+          type="button"
+          onClick={onRecover}
+        >
+          {isRecovering ? "Recovering..." : "Refresh recovery"}
+        </button>
+        <button
+          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          disabled={!canResume}
+          type="button"
+          onClick={onResume}
+        >
+          {isResuming ? "Resuming..." : "Safe resume"}
+        </button>
       </div>
     </div>
   );

@@ -123,7 +123,9 @@ class ControlledTaskExecutionService:
         session = self.task_store.get(task_execution_id)
         self._ensure_state_guard(session, request)
         if session.state == "APPLIED" and session.apply_result is not None:
-            raise TaskExecutionBlockedError("Task has already been applied.")
+            return session
+        if session.apply_result is not None and session.mutation_execution_id:
+            return session
         if session.state != "AWAITING_EXECUTION_APPROVAL":
             raise TaskExecutionBlockedError("Task is not awaiting execution approval.")
         if not session.handoff or not session.dry_run or not session.diff_preview:

@@ -206,3 +206,15 @@ def test_commit_message_is_sanitized(tmp_path, monkeypatch):
 
     assert body["status"] == "COMMITTED"
     assert body["message"] == "feat: update malicious"
+
+
+def test_duplicate_commit_returns_existing_audit_without_new_commit(tmp_path, monkeypatch):
+    store = configure_service(tmp_path, monkeypatch)
+    workspace = make_repo(tmp_path)
+    create_quality_passed_execution(store, workspace)
+
+    first = post_commit("exec-1", "feat: update sample").json()
+    second = post_commit("exec-1", "feat: duplicate").json()
+
+    assert second == first
+    assert run_git(workspace, ["rev-list", "--count", "HEAD"]).stdout.strip() == "2"

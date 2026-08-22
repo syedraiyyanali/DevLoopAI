@@ -3,15 +3,15 @@
 ## Last Updated
 
 Date: 2026-08-22
-Time: 12:47:07 +05:00
+Time: 13:13:40 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 41 frontend polish and task progress UX
-Working Tree: clean after Step 41 feature commit
-Last Push: Step 41 checkpoint pushed to origin/main
+Latest Commit: Step 42 failure recovery and resume handling
+Working Tree: clean after Step 42 feature commit
+Last Push: Step 42 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 41: Frontend Polish and Task Progress UX
+Step: Sprint 1 - Step 42: Failure Recovery and Resume Handling
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 41 frontend polish and task progress UX completed, verified, committed, and pushed.
+Step 42 failure recovery and resume handling completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 41 checkpoint with Sprint 1 Step 42.
+Continue from the verified Step 42 checkpoint with Sprint 1 Step 43.
 
 ## What Has Been Completed
 
@@ -830,6 +830,29 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 41 full backend pytest regression: PASS, `234 passed`.
 - Step 41 route render smoke: HTTP 200 returned on ports `3106`, `3107`, and `3108`; PowerShell/Node cleanup wrappers returned non-zero after successful HTTP 200 due Windows child-process cleanup behavior, and all smoke-test listener processes were cleaned up.
 - Step 41 Python compile check: SKIPPED because no backend Python files changed.
+- Added centralized `TaskRecoveryService` for deterministic recovery/resume inspection from persisted SQLite records.
+- Added structured `TaskRecoveryResponse` with current task state, recovery status, safe next action, completed stages, interrupted/unknown stages, blockers, warnings, approval requirement, mutation-performed flag, rollback availability, commit state/hash, quality status, required/completed/missing verification checks, and stale/corrupt state flag.
+- Added read-only recovery API:
+  - `GET /api/v1/workflows/execution/task/{task_execution_id}/recovery`
+- Added safe resume API:
+  - `POST /api/v1/workflows/execution/task/{task_execution_id}/resume`
+- Safe resume only reconciles non-destructive orchestration states:
+  - interrupted `VERIFYING` -> `APPLIED` with explicit rerun warning
+  - interrupted `RETRY_PREPARING` -> restores persisted reviewed retry diff or returns to `QUALITY_FAILED`
+  - interrupted `PREPARING` -> `FAILED`
+  - ambiguous `APPLYING` -> `BLOCKED`
+- Safe resume does not approve, apply, rollback, commit, run verification, run model calls, install dependencies, push Git changes, or execute commands.
+- Strengthened duplicate Apply idempotency at the controlled task layer: repeated Apply after a persisted apply returns the existing task session and mutation execution ID without writing again.
+- Strengthened duplicate Git commit protection: if a persisted `COMMITTED` audit exists for an execution, repeated commit requests return that audit and do not create another commit.
+- Recovery detects stale/corrupt state such as missing workflow/execution links, mismatched attempt/diff review audit, incomplete `IN_PROGRESS` mutation audit, Quality Gate blocked file-integrity state, and file changes after downtime.
+- Frontend Controlled Single-Task Execution UI now shows a Recovery and Resume card with recovery status, safe next action, completed stages, interrupted/unknown stages, verification state, quality state, commit state, mutation-performed state, rollback availability, warnings, and blockers.
+- Frontend safe resume control is explicit and labeled as non-destructive; no automatic resume button triggers Apply, rollback, verification, or commit.
+- Step 42 focused recovery/task/Git tests: PASS, `29 passed`.
+- Step 42 full backend pytest regression: PASS, `242 passed`.
+- Step 42 Python compile check: PASS.
+- Step 42 frontend ESLint: PASS.
+- Step 42 frontend production build: PASS.
+- Step 42 route render smoke: HTTP 200 returned on port `3109`; the PowerShell cleanup wrapper returned non-zero after successful HTTP 200 due the same Windows child-process cleanup behavior observed in Step 41, and no test listener remained afterward.
 
 ## Known Problems
 
@@ -856,7 +879,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 38 safe Git diff/status integration is verified, committed, and pushed.
 - Step 39 controlled Git commit workflow is verified, committed, and pushed.
 - Step 40 better test selection and validation strategy is verified, committed, and pushed.
-- Step 41 frontend polish and task progress UX is verified locally and ready to commit/push.
+- Step 41 frontend polish and task progress UX is verified, committed, and pushed.
+- Step 42 failure recovery and resume handling is verified, committed, and pushed.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -928,6 +952,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 40 fixed volatile handoff comparison around regenerated preflight file metadata; stable approval/allowlist fields remain canonical while exact reviewed file content is still protected by deterministic hashes.
 - Step 40 fixed Windows same-instant approval/preflight mtime false positives with a narrow timestamp tolerance and retained stale-content blocking at apply time.
 - Step 41 kept all mutation, rollback, verification, retry, and Git commit actions explicit; no automatic apply, rollback, retry mutation, commit, push, arbitrary shell, dependency install, or deployment controls were added.
+- Step 42 preserves that boundary during recovery: restart/resume never replays destructive actions and only reports or reconciles safe persisted orchestration state.
+- Step 42 changed the old duplicate-Apply behavior from `409` to idempotent success with the existing mutation execution ID, matching the recovery safety requirement.
 
 ## Git Commits From Recent Work
 
@@ -952,7 +978,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - c9a5053 - feat: add read-only git status integration
 - 1b26a16 - feat: add controlled git commit workflow
 - e7d4c8b - feat: add verification selection policy
-- Step 41 - pending commit: feat: polish execution progress UX
+- 7227af1 - feat: polish execution progress UX
+- Step 42 - feat: add task recovery resume handling
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -977,7 +1004,16 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
+- `backend/app/api/v1/endpoints/task_execution.py`
+- `backend/app/models/task_recovery.py`
+- `backend/app/services/task_recovery.py`
+- `backend/app/services/task_execution.py`
+- `backend/app/services/git_commit.py`
+- `backend/tests/test_task_recovery_api.py`
+- `backend/tests/test_task_execution_api.py`
+- `backend/tests/test_git_commit_api.py`
 - `frontend/components/execution-review-panel.tsx`
+- `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -990,14 +1026,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 42 - Failure Recovery and Resume Handling.
+Recommended next task: Sprint 1 Step 43 - Final Hardening, Security Audit, Full Regression, and Sprint 1 Release Candidate.
 
 ## Next Files Likely to Change
 
-- recover interrupted frontend/backend execution-review sessions from persisted IDs
-- resume partially prepared/applied/verified task sessions after reload
-- improve stale, blocked, and failed action recovery messages
-- preserve explicit approval boundaries during resume
+- security audit of mutation, verification, retry, recovery, and Git commit boundaries
+- full regression and smoke-test sweep
+- documentation cleanup for Sprint 1 release candidate
+- verify no secrets/runtime databases/snapshots are tracked
 
 ## Do Not Forget
 
