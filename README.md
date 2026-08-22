@@ -45,6 +45,19 @@ Task
 
 Planning approval and execution approval are separate. Approving a plan never authorizes file mutation. The user must explicitly apply the exact reviewed diff before project files can change.
 
+## Quick Start on Windows
+
+Double-click `start-devloopai.bat` from the repository root.
+
+The launcher:
+
+- starts the FastAPI backend in a separate terminal window using `backend\.venv\Scripts\python.exe`;
+- starts the Next.js frontend in a separate terminal window with `npm run dev`;
+- waits briefly, then opens `http://localhost:3000`;
+- resolves paths relative to the batch file, so it works when the repository is cloned to another folder.
+
+If port `8000` or `3000` is already in use, the launcher leaves that existing process alone instead of starting a duplicate.
+
 ## Setup
 
 ### Backend

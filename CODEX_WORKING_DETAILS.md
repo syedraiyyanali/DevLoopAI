@@ -3,15 +3,15 @@
 ## Last Updated
 
 Date: 2026-08-22
-Time: 13:27:24 +05:00
+Time: 13:42:40 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 43 Sprint 1 release candidate hardening
-Working Tree: clean after Step 43 release-candidate commit
-Last Push: Step 43 checkpoint pushed to origin/main
+Latest Commit: Windows one-click development launcher
+Working Tree: clean after launcher utility commit
+Last Push: launcher utility checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -21,17 +21,17 @@ Release Decision: SPRINT 1 COMPLETE
 
 ## Current Step
 
-Step: Sprint 1 - Step 43: Final Hardening, Security Audit, Full Regression, and Release Candidate
+Step: Post-Sprint 1 Utility: Windows One-Click Development Launcher
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 43 final Sprint 1 hardening, security audit, full regression, and release-candidate documentation completed, verified, committed, and pushed.
+Windows one-click development launcher completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Sprint 1 is complete based on the Step 43 security audit, full regression, frontend verification, route smoke, Ollama smoke, and disposable E2E scenario coverage. Do not begin Sprint 2 automatically.
+Sprint 1 is complete. The current post-Sprint utility adds a Windows launcher for starting the backend and frontend together. Do not begin Sprint 2 automatically.
 
 ## What Has Been Completed
 
@@ -872,6 +872,14 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 43 route render smoke: PASS, HTTP 200 returned on port `3110`.
 - Step 43 direct Ollama generation smoke: PASS with `qwen2.5-coder:7b`, response `DevLoopAI Sprint 1 OK`.
 - Step 43 disposable E2E release scenarios A-H are covered by freshly rerun focused tests: happy path, failed change plus retry, retry limit, rollback, stale reviewed diff, multi-file rollback, Git safety, and restart/recovery.
+- Added `start-devloopai.bat` at the repository root as a Windows one-click development launcher.
+- Launcher resolves paths relative to the batch file location, validates required backend/frontend files, uses the existing backend virtual environment, starts FastAPI and Next.js in separate terminal windows, avoids duplicate starts when ports `8000` or `3000` are already listening, waits briefly, and opens `http://localhost:3000`.
+- Launcher does not modify Ollama configuration, start destructive workflows, kill processes, install dependencies, or change Git state.
+- README now includes `Quick Start on Windows` instructions for double-click startup.
+- Launcher validation smoke from repository root: PASS with `cmd /c start-devloopai.bat --check`.
+- Launcher validation smoke from outside the repository: PASS by invoking the batch file via its absolute path with `--check`, confirming paths resolve relative to the batch file location.
+- Backend import smoke from the backend working directory: PASS with `backend\.venv\Scripts\python.exe -c "import app.main"`.
+- An initial backend import smoke from the repository root failed with `ModuleNotFoundError: app`; rerunning from `backend` passed, matching the launcher's actual working directory behavior.
 
 ## Known Problems
 
@@ -1026,13 +1034,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 ## Files Changed in Current Work
 
 - `README.md`
-- `backend/app/models/git_status.py`
-- `backend/app/services/git_commit.py`
-- `backend/app/services/git_status.py`
-- `backend/app/services/workspace.py`
-- `backend/tests/test_git_commit_api.py`
-- `backend/tests/test_git_status_api.py`
-- `backend/tests/test_workspace_api.py`
+- `start-devloopai.bat`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
