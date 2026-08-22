@@ -44,6 +44,7 @@ import {
   type PlanningWorkflowHistoryItem,
   type PlanningWorkflowHistoryRecord,
   type TaskExecutionSession,
+  type VerificationPlanCheck,
 } from "../lib/api-client";
 
 type LoadingAction =
@@ -67,6 +68,14 @@ type LoadingAction =
   | "git-status"
   | "git-commit"
   | null;
+
+type ProgressState = "complete" | "current" | "waiting" | "blocked" | "failed" | "skipped";
+
+interface ProgressItem {
+  label: string;
+  state: ProgressState;
+  detail: string;
+}
 
 const SERVER_ALLOWED_VERIFICATIONS = [
   "python_compile",
@@ -138,23 +147,46 @@ export default function ExecutionReviewPanel() {
     execution.rollback_available &&
     !executionRolledBack &&
     loadingAction === null;
+  const visibleQuality = taskExecution?.quality_result ?? selectedExecutionQuality;
+  const mutationState = getMutationState({
+    diffPreview,
+    execution,
+    gitCommit,
+    rollback,
+    taskExecution,
+  });
   const progress = useMemo(
-    () => [
-      { label: "Planning", active: Boolean(selectedWorkflow), state: selectedWorkflow ? "ready" : "waiting" },
-      { label: "Approval", active: selectedWorkflow?.approval_status === "APPROVED", state: selectedWorkflow?.approval_status ?? "waiting" },
-      { label: "Preflight", active: preflight?.status === "READY_FOR_EXECUTION", state: preflight?.status ?? "waiting" },
-      { label: "Handoff", active: Boolean(handoff), state: handoff ? "ready" : "waiting" },
-      { label: "Dry Run", active: Boolean(dryRun), state: dryRun ? "ready" : "waiting" },
-      { label: "Diff", active: Boolean(diffPreview), state: diffPreview ? "ready" : "waiting" },
-      { label: "Apply", active: execution?.status === "EXECUTED", state: execution?.status ?? "waiting" },
-      {
-        label: "Verify",
-        active: verifications.some((verification) => verification.status === "PASSED"),
-        state: latestVerificationState(verifications),
-      },
-      { label: "Rollback", active: executionRolledBack, state: rollback?.status ?? "conditional" },
+    () =>
+      buildProgressItems({
+        diffPreview,
+        dryRun,
+        execution,
+        gitCommit,
+        gitStatus,
+        handoff,
+        loadingAction,
+        preflight,
+        quality: visibleQuality,
+        rollback,
+        selectedWorkflow,
+        taskExecution,
+        verifications,
+      }),
+    [
+      diffPreview,
+      dryRun,
+      execution,
+      gitCommit,
+      gitStatus,
+      handoff,
+      loadingAction,
+      preflight,
+      rollback,
+      selectedWorkflow,
+      taskExecution,
+      verifications,
+      visibleQuality,
     ],
-    [diffPreview, dryRun, execution, executionRolledBack, handoff, preflight, rollback, selectedWorkflow, verifications],
   );
 
   async function loadHistory() {
@@ -579,9 +611,15 @@ export default function ExecutionReviewPanel() {
         </h2>
         <p className="text-sm leading-6 text-zinc-600">
           Planning history, approval state, preflight, handoff, dry-run, and
-          diff preview. Preview only - no project files have been modified.
+          diff preview. Backend state remains authoritative for every unsafe action.
         </p>
       </div>
+
+      <MutationStateBanner
+        detail={mutationState.detail}
+        label={mutationState.label}
+        status={mutationState.status}
+      />
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
@@ -633,6 +671,11 @@ export default function ExecutionReviewPanel() {
 
         <div className="flex flex-col gap-4">
           <ProgressRail items={progress} />
+          <ApprovalBoundaryCards
+            diffPreview={diffPreview}
+            selectedWorkflow={selectedWorkflow}
+            taskExecution={taskExecution}
+          />
 
           {error ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
@@ -654,6 +697,7 @@ export default function ExecutionReviewPanel() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
             <StepButton
               disabled={!canRunPreflight}
+              disabledReason={canRunPreflight ? "" : "Select a workflow and wait for current actions to finish."}
               label={loadingAction === "preflight" ? "Checking..." : "Run preflight"}
               onClick={() =>
                 selectedWorkflow
@@ -667,6 +711,7 @@ export default function ExecutionReviewPanel() {
             />
             <StepButton
               disabled={!canCreateHandoff}
+              disabledReason={canCreateHandoff ? "" : "Preflight must be READY_FOR_EXECUTION first."}
               label={loadingAction === "handoff" ? "Creating..." : "Create handoff"}
               onClick={() =>
                 selectedWorkflow
@@ -680,6 +725,7 @@ export default function ExecutionReviewPanel() {
             />
             <StepButton
               disabled={!canRunDryRun}
+              disabledReason={canRunDryRun ? "" : "Create a valid execution handoff first."}
               label={loadingAction === "dry-run" ? "Running..." : "Run dry-run"}
               onClick={() =>
                 handoff
@@ -689,6 +735,7 @@ export default function ExecutionReviewPanel() {
             />
             <StepButton
               disabled={!canRunDiff}
+              disabledReason={canRunDiff ? "" : "Run a valid dry-run first."}
               label={loadingAction === "diff" ? "Previewing..." : "Preview diff"}
               onClick={() =>
                 dryRun
@@ -718,6 +765,7 @@ export default function ExecutionReviewPanel() {
               onRefresh={() => void refreshVerificationHistory(execution.execution_id)}
               onRun={() => void runSelectedVerification()}
               onToggle={toggleVerificationType}
+              quality={selectedExecutionQuality}
               selectedTypes={verificationTypes}
               verifications={verifications}
             />
@@ -789,6 +837,84 @@ export default function ExecutionReviewPanel() {
         selectedExecution={selectedExecution}
       />
     </section>
+  );
+}
+
+function MutationStateBanner({
+  detail,
+  label,
+  status,
+}: {
+  detail: string;
+  label: string;
+  status: ProgressState;
+}) {
+  return (
+    <div className={`mt-4 rounded-md border px-4 py-3 text-sm ${stateClassName(status)}`}>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-semibold">{label}</p>
+        <StatusBadge value={status.toUpperCase()} />
+      </div>
+      <p className="mt-1 leading-6">{detail}</p>
+    </div>
+  );
+}
+
+function ApprovalBoundaryCards({
+  diffPreview,
+  selectedWorkflow,
+  taskExecution,
+}: {
+  diffPreview: CoderDiffPreviewResponse | null;
+  selectedWorkflow: PlanningWorkflowHistoryRecord | null;
+  taskExecution: TaskExecutionSession | null;
+}) {
+  const planApproved = selectedWorkflow?.approval_status === "APPROVED";
+  const executionWaiting =
+    taskExecution?.state === "AWAITING_EXECUTION_APPROVAL" || Boolean(diffPreview);
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="rounded-md border border-zinc-200 bg-white p-3 text-sm leading-6 text-zinc-700">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-semibold text-zinc-950">Plan Approval</p>
+          <StatusBadge value={selectedWorkflow?.approval_status ?? "NO_WORKFLOW"} />
+        </div>
+        <p className="mt-2">
+          {planApproved
+            ? "The implementation plan is approved for preparation only."
+            : "The plan must be explicitly approved before execution preparation can continue."}
+        </p>
+      </div>
+      <div className="rounded-md border border-zinc-200 bg-white p-3 text-sm leading-6 text-zinc-700">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-semibold text-zinc-950">Execution Approval</p>
+          <StatusBadge value={executionWaiting ? "DIFF_REVIEW_READY" : "NOT_READY"} />
+        </div>
+        <p className="mt-2">
+          Execution approval is separate. Files can change only after the exact reviewed diff is visible and the user clicks Apply.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ActionDisabledReasons({ reasons }: { reasons: string[] }) {
+  const visibleReasons = Array.from(new Set(reasons.filter(Boolean)));
+
+  if (visibleReasons.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
+      <p className="font-semibold uppercase text-zinc-500">Why some actions are disabled</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        {visibleReasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -957,6 +1083,7 @@ function GitStatusSection({
     Boolean(gitStatus?.is_git_repository) &&
     gitStatus?.unexpected_changed_files.length === 0 &&
     !isCommitting;
+  const commitEligibility = getCommitEligibility(gitStatus);
 
   return (
     <div className="mt-5 rounded-md border border-zinc-200 bg-white p-4">
@@ -964,7 +1091,8 @@ function GitStatusSection({
         <div>
           <p className="text-sm font-semibold text-zinc-950">Read-Only Git Status</p>
           <p className="text-sm leading-6 text-zinc-600">
-            Fixed read-only Git checks only. This does not stage, commit, reset, clean, push, or mutate files.
+            Fixed read-only Git checks plus explicit controlled commit for quality-passed executions.
+            There is no push control.
           </p>
         </div>
         <button
@@ -992,6 +1120,9 @@ function GitStatusSection({
           {isCommitting ? "Committing..." : "Commit verified changes"}
         </button>
       </div>
+      <p className="mt-2 text-xs leading-5 text-zinc-500">
+        {commitEligibility}
+      </p>
       {gitStatus ? (
         <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1000,6 +1131,10 @@ function GitStatusSection({
           </div>
           <HashRow label="Branch" value={gitStatus.current_branch ?? "Not available"} />
           <HashRow label="Changed files" value={String(gitStatus.changed_file_count)} />
+          <HashRow
+            label="Commit eligibility"
+            value={canCommit ? "Eligible after explicit click" : commitEligibility}
+          />
           <ListBlock label="Staged" values={gitStatus.staged_files} />
           <ListBlock label="Unstaged" values={gitStatus.unstaged_files} />
           <ListBlock label="Untracked" values={gitStatus.untracked_files} />
@@ -1103,13 +1238,13 @@ function ControlledTaskSection({
           Planning approval alone never applies files.
         </p>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-6">
-        {["Prepare", "Review Diff", "Apply", "Verify", "Quality", "Retry"].map((label) => (
-          <div key={label} className="rounded-md border border-zinc-200 bg-white px-3 py-2">
-            <p className="font-medium text-zinc-900">{label}</p>
-          </div>
-        ))}
-      </div>
+      <ProgressRail items={buildTaskProgressItems(taskExecution, {
+        isApplying,
+        isPreparing,
+        isRetrying,
+        isRollingBack,
+        isVerifying,
+      })} />
       <div className="mt-4 flex flex-col gap-3 lg:flex-row">
         <button
           className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
@@ -1151,6 +1286,11 @@ function ControlledTaskSection({
             <StatusBadge value={taskExecution.state} />
           </div>
           <p className="mt-3">{taskExecution.message}</p>
+          <MutationStateBanner
+            detail={getTaskMutationDetail(taskExecution)}
+            label={getTaskMutationLabel(taskExecution)}
+            status={getTaskMutationStatus(taskExecution)}
+          />
           <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
             <p className="font-semibold text-zinc-950">
               Attempt {taskExecution.current_attempt} of {taskExecution.max_attempts}
@@ -1159,6 +1299,11 @@ function ControlledTaskSection({
               Remaining improvement retries: {remainingAttempts}. Every retry returns to reviewed diff
               and requires explicit Apply before files can change.
             </p>
+            {taskExecution.state === "RETRY_LIMIT_REACHED" ? (
+              <p className="mt-1 font-medium text-amber-900">
+                Retry limit reached. No additional retry proposal can be prepared.
+              </p>
+            ) : null}
           </div>
           {taskExecution.attempts.length > 0 ? (
             <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3">
@@ -1202,6 +1347,19 @@ function ControlledTaskSection({
           {taskExecution.quality_result ? (
             <QualityGateCard quality={taskExecution.quality_result} />
           ) : null}
+          {taskExecution.verification_results.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs font-semibold uppercase text-zinc-500">
+                Task verification runs
+              </p>
+              {taskExecution.verification_results.map((verification) => (
+                <VerificationResult
+                  key={verification.verification_id}
+                  verification={verification}
+                />
+              ))}
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <button
               className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-amber-600 px-4 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
@@ -1236,8 +1394,20 @@ function ControlledTaskSection({
               {isRetrying ? "Preparing retry..." : "Prepare improvement retry"}
             </button>
           </div>
+          <ActionDisabledReasons
+            reasons={[
+              canApply ? "" : getTaskActionReason(taskExecution, "apply"),
+              canVerify ? "" : getTaskActionReason(taskExecution, "verify"),
+              canRollback ? "" : getTaskActionReason(taskExecution, "rollback"),
+              canRetry ? "" : getTaskActionReason(taskExecution, "retry"),
+            ]}
+          />
         </div>
-      ) : null}
+      ) : (
+        <p className="mt-3 rounded-md border border-zinc-200 bg-white p-3 text-sm text-zinc-500">
+          No controlled task session loaded. Select an approved workflow, then prepare it to review the exact diff before execution approval.
+        </p>
+      )}
     </div>
   );
 }
@@ -1793,6 +1963,7 @@ function VerificationCard({
   onRefresh,
   onRun,
   onToggle,
+  quality,
   selectedTypes,
   verifications,
 }: {
@@ -1801,6 +1972,7 @@ function VerificationCard({
   onRefresh: () => void;
   onRun: () => void;
   onToggle: (verificationType: string) => void;
+  quality: ExecutionQualityResponse | null;
   selectedTypes: string[];
   verifications: ExecutionVerificationResult[];
 }) {
@@ -1811,6 +1983,16 @@ function VerificationCard({
   return (
     <ResultCard title="Verification" status={latestVerificationState(verifications)}>
       <p>Run only server-allowlisted checks. No arbitrary command input is accepted.</p>
+      {quality?.verification_plan ? (
+        <VerificationPlanSummary
+          checks={quality.verification_plan.checks}
+          verifications={verifications}
+        />
+      ) : (
+        <p className="text-xs leading-5 text-zinc-500">
+          Select an execution or run verification to load the deterministic required-check policy.
+        </p>
+      )}
       {hasRollbackRecommendation ? (
         <p className="font-medium text-amber-900">
           Verification failed - rollback recommended.
@@ -1850,6 +2032,11 @@ function VerificationCard({
           Refresh history
         </button>
       </div>
+      {!canVerify ? (
+        <p className="text-xs leading-5 text-zinc-500">
+          Verification is enabled only after an EXECUTED mutation that has not been rolled back and at least one allowlisted check is selected.
+        </p>
+      ) : null}
       <div className="mt-4 space-y-4">
         {verifications.length > 0 ? (
           verifications.map((verification) => (
@@ -1860,6 +2047,56 @@ function VerificationCard({
         )}
       </div>
     </ResultCard>
+  );
+}
+
+function VerificationPlanSummary({
+  checks,
+  verifications,
+}: {
+  checks: VerificationPlanCheck[];
+  verifications: ExecutionVerificationResult[];
+}) {
+  const latestByType = new Map<string, ExecutionVerificationResult>();
+  for (const verification of verifications) {
+    latestByType.set(verification.verification_type, verification);
+  }
+
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white p-3">
+      <p className="text-xs font-semibold uppercase text-zinc-500">
+        Required, optional, and skipped checks
+      </p>
+      <div className="mt-2 grid gap-2">
+        {checks.map((check) => {
+          const latest = latestByType.get(check.verification_type);
+          return (
+            <div
+              key={check.verification_type}
+              className="rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs leading-5"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-medium text-zinc-950">{check.verification_type}</p>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge value={check.tier} />
+                  <StatusBadge value={latest?.status ?? "NOT_RUN"} />
+                </div>
+              </div>
+              <p className="mt-1 text-zinc-700">{check.reason}</p>
+              {check.skip_reason ? (
+                <p className="mt-1 text-zinc-500">Skipped: {check.skip_reason}</p>
+              ) : null}
+              {latest ? (
+                <p className="mt-1 text-zinc-600">
+                  Latest run: {latest.status}, {latest.duration_seconds.toFixed(2)}s,
+                  rollback {latest.rollback_recommended ? "recommended" : "not recommended"}.
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -2018,21 +2255,18 @@ function ResultCard({
 function ProgressRail({
   items,
 }: {
-  items: { label: string; active: boolean; state: string }[];
+  items: ProgressItem[];
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs sm:grid-cols-3 xl:grid-cols-9">
+    <div className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
       {items.map((item) => (
         <div
           key={item.label}
-          className={`rounded-md border px-2 py-2 ${
-            item.active
-              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-              : "border-zinc-200 bg-white text-zinc-500"
-          }`}
+          className={`rounded-md border px-2 py-2 ${stateClassName(item.state)}`}
         >
           <p className="font-medium">{item.label}</p>
-          <p className="mt-1 truncate">{item.state}</p>
+          <p className="mt-1 font-semibold uppercase">{item.state}</p>
+          <p className="mt-1 line-clamp-2">{item.detail}</p>
         </div>
       ))}
     </div>
@@ -2041,22 +2275,30 @@ function ProgressRail({
 
 function StepButton({
   disabled,
+  disabledReason,
   label,
   onClick,
 }: {
   disabled: boolean;
+  disabledReason: string;
   label: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {label}
-    </button>
+    <div>
+      <button
+        className="inline-flex h-10 w-full items-center justify-center rounded-md bg-zinc-950 px-3 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+        disabled={disabled}
+        title={disabled ? disabledReason : ""}
+        type="button"
+        onClick={onClick}
+      >
+        {label}
+      </button>
+      {disabled && disabledReason ? (
+        <p className="mt-1 text-xs leading-5 text-zinc-500">{disabledReason}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -2094,6 +2336,371 @@ function StatusBadge({ value }: { value: string }) {
       {value}
     </span>
   );
+}
+
+function buildProgressItems({
+  diffPreview,
+  dryRun,
+  execution,
+  gitCommit,
+  gitStatus,
+  handoff,
+  loadingAction,
+  preflight,
+  quality,
+  rollback,
+  selectedWorkflow,
+  taskExecution,
+  verifications,
+}: {
+  diffPreview: CoderDiffPreviewResponse | null;
+  dryRun: CoderDryRunResponse | null;
+  execution: ExecutionApplyResponse | null;
+  gitCommit: GitCommitResponse | null;
+  gitStatus: GitStatusResponse | null;
+  handoff: ExecutionHandoffResponse | null;
+  loadingAction: LoadingAction;
+  preflight: ExecutionPreflightResponse | null;
+  quality: ExecutionQualityResponse | null;
+  rollback: ExecutionRollbackResponse | null;
+  selectedWorkflow: PlanningWorkflowHistoryRecord | null;
+  taskExecution: TaskExecutionSession | null;
+  verifications: ExecutionVerificationResult[];
+}): ProgressItem[] {
+  const planApproved = selectedWorkflow?.approval_status === "APPROVED";
+  const reviewerRejected =
+    selectedWorkflow?.reviewer_output.approval_recommendation === "REJECT";
+  const validatorBlocked =
+    selectedWorkflow?.validator_output.overall_validation_status === "BLOCKED";
+  const verificationState = latestVerificationState([
+    ...verifications,
+    ...(taskExecution?.verification_results ?? []),
+  ]);
+  const retryState = taskExecution?.state;
+
+  return [
+    progressItem("Context", selectedWorkflow?.workspace_path ? "complete" : "skipped", selectedWorkflow?.workspace_path ?? "No workspace selected"),
+    progressItem("Planning", selectedWorkflow ? "complete" : currentIfLoading(loadingAction === "history"), selectedWorkflow ? "Workflow loaded" : "Select or create a workflow"),
+    progressItem("Review", reviewerRejected ? "blocked" : selectedWorkflow ? "complete" : "waiting", selectedWorkflow?.reviewer_output.approval_recommendation ?? "Waiting for planner output"),
+    progressItem("Validation", validatorBlocked ? "blocked" : selectedWorkflow ? "complete" : "waiting", selectedWorkflow?.validator_output.overall_validation_status ?? "Waiting for reviewed plan"),
+    progressItem("Plan Approval", planApproved ? "complete" : selectedWorkflow ? "waiting" : "waiting", selectedWorkflow?.approval_status ?? "No workflow selected"),
+    progressItem("Preflight", statusToProgress(preflight?.status, loadingAction === "preflight"), preflight?.status ?? "Not run"),
+    progressItem("Handoff", handoff ? "complete" : loadingAction === "handoff" ? "current" : "waiting", handoff ? "Canonical handoff created" : "Needs ready preflight"),
+    progressItem("Dry Run", dryRun ? "complete" : loadingAction === "dry-run" ? "current" : "waiting", dryRun ? "Proposal generated with no writes" : "Needs handoff"),
+    progressItem("Diff Review", diffPreview || taskExecution?.diff_preview ? "complete" : loadingAction === "diff" ? "current" : "waiting", diffPreview?.review_id ?? taskExecution?.diff_review_id ?? "Exact diff not reviewed"),
+    progressItem("Execution Approval", taskExecution?.state === "AWAITING_EXECUTION_APPROVAL" || diffPreview ? "waiting" : execution || taskExecution?.apply_result ? "complete" : "waiting", "Separate explicit Apply click required"),
+    progressItem("Apply", applyProgressState(execution, taskExecution, loadingAction), execution?.status ?? taskExecution?.apply_result?.status ?? "No mutation confirmed"),
+    progressItem("Verification", verificationProgressState(verificationState, loadingAction, taskExecution), verificationState === "waiting" ? "Required checks not run" : verificationState),
+    progressItem("Quality", qualityProgressState(quality, taskExecution), quality?.quality_status ?? taskExecution?.quality_result?.quality_status ?? "Not evaluated"),
+    progressItem("Retry", retryProgressState(retryState, loadingAction), retryDetail(taskExecution)),
+    progressItem("Rollback", rollback?.status === "ROLLED_BACK" || taskExecution?.state === "ROLLED_BACK" ? "complete" : rollback?.status === "BLOCKED" ? "blocked" : "skipped", rollback?.status ?? taskExecution?.rollback_status ?? "Only if needed"),
+    progressItem("Git Commit", gitCommit?.status === "COMMITTED" ? "complete" : gitCommit?.status === "BLOCKED" || gitCommit?.status === "FAILED" ? "blocked" : gitStatus?.is_git_repository ? "waiting" : "skipped", gitCommit?.commit_hash ?? getCommitEligibility(gitStatus)),
+  ];
+}
+
+function buildTaskProgressItems(
+  taskExecution: TaskExecutionSession | null,
+  loading: {
+    isApplying: boolean;
+    isPreparing: boolean;
+    isRetrying: boolean;
+    isRollingBack: boolean;
+    isVerifying: boolean;
+  },
+): ProgressItem[] {
+  if (!taskExecution) {
+    return [
+      progressItem("Prepare", loading.isPreparing ? "current" : "waiting", "Approved workflow required"),
+      progressItem("Review Diff", "waiting", "No task diff loaded"),
+      progressItem("Apply", "waiting", "Execution approval is separate"),
+      progressItem("Verify", "waiting", "No mutation yet"),
+      progressItem("Quality", "waiting", "No verification yet"),
+      progressItem("Retry", "skipped", "Only after quality failure"),
+    ];
+  }
+
+  return [
+    progressItem("Prepare", "complete", "Task session created"),
+    progressItem("Review Diff", taskExecution.diff_preview ? "complete" : "waiting", taskExecution.diff_review_id ?? "No reviewed diff"),
+    progressItem("Apply", taskExecution.apply_result ? applyResultState(taskExecution.apply_result.status) : loading.isApplying ? "current" : taskExecution.state === "AWAITING_EXECUTION_APPROVAL" ? "waiting" : "skipped", taskExecution.apply_result?.status ?? "Awaiting explicit Apply"),
+    progressItem("Verify", loading.isVerifying ? "current" : taskExecution.verification_results.length > 0 ? verificationProgressState(latestVerificationState(taskExecution.verification_results), null, taskExecution) : "waiting", latestVerificationState(taskExecution.verification_results)),
+    progressItem("Quality", qualityProgressState(taskExecution.quality_result, taskExecution), taskExecution.quality_result?.quality_status ?? "Not evaluated"),
+    progressItem("Retry", loading.isRetrying ? "current" : retryProgressState(taskExecution.state, null), retryDetail(taskExecution)),
+    progressItem("Rollback", loading.isRollingBack ? "current" : taskExecution.state === "ROLLED_BACK" ? "complete" : taskExecution.rollback_recommended ? "waiting" : "skipped", taskExecution.rollback_status ?? "Explicit only"),
+  ];
+}
+
+function progressItem(label: string, state: ProgressState, detail: string): ProgressItem {
+  return { label, state, detail };
+}
+
+function currentIfLoading(isLoading: boolean): ProgressState {
+  return isLoading ? "current" : "waiting";
+}
+
+function statusToProgress(status: string | undefined, isLoading: boolean): ProgressState {
+  if (isLoading) {
+    return "current";
+  }
+  if (!status) {
+    return "waiting";
+  }
+  if (["READY_FOR_EXECUTION", "APPROVED", "PASSED", "EXECUTED", "COMMITTED"].includes(status)) {
+    return "complete";
+  }
+  if (["BLOCKED", "REJECTED", "REAPPROVAL_REQUIRED"].includes(status)) {
+    return "blocked";
+  }
+  if (["FAILED", "TIMED_OUT"].includes(status)) {
+    return "failed";
+  }
+  if (status === "SKIPPED") {
+    return "skipped";
+  }
+  return "waiting";
+}
+
+function applyProgressState(
+  execution: ExecutionApplyResponse | null,
+  taskExecution: TaskExecutionSession | null,
+  loadingAction: LoadingAction,
+): ProgressState {
+  if (loadingAction === "apply" || loadingAction === "task-apply") {
+    return "current";
+  }
+  const status = execution?.status ?? taskExecution?.apply_result?.status;
+  return applyResultState(status);
+}
+
+function applyResultState(status: string | undefined): ProgressState {
+  if (!status) {
+    return "waiting";
+  }
+  if (status === "EXECUTED") {
+    return "complete";
+  }
+  if (status === "ROLLED_BACK") {
+    return "skipped";
+  }
+  if (["BLOCKED", "REVIEW_STALE", "PARTIALLY_FAILED_AND_ROLLED_BACK"].includes(status)) {
+    return "blocked";
+  }
+  return "waiting";
+}
+
+function verificationProgressState(
+  status: string,
+  loadingAction: LoadingAction,
+  taskExecution: TaskExecutionSession | null,
+): ProgressState {
+  if (loadingAction === "verify" || loadingAction === "task-verify" || taskExecution?.state === "VERIFYING") {
+    return "current";
+  }
+  return statusToProgress(status === "waiting" ? undefined : status, false);
+}
+
+function qualityProgressState(
+  quality: ExecutionQualityResponse | null,
+  taskExecution: TaskExecutionSession | null,
+): ProgressState {
+  const status = quality?.quality_status ?? taskExecution?.quality_result?.quality_status;
+  if (!status) {
+    return "waiting";
+  }
+  if (status === "QUALITY_PASSED") {
+    return "complete";
+  }
+  if (status === "QUALITY_FAILED") {
+    return "failed";
+  }
+  if (status === "ROLLED_BACK") {
+    return "skipped";
+  }
+  if (status === "BLOCKED") {
+    return "blocked";
+  }
+  return "waiting";
+}
+
+function retryProgressState(
+  state: string | undefined,
+  loadingAction: LoadingAction,
+): ProgressState {
+  if (loadingAction === "task-retry" || state === "RETRY_PREPARING") {
+    return "current";
+  }
+  if (state === "RETRY_LIMIT_REACHED") {
+    return "blocked";
+  }
+  if (state === "AWAITING_EXECUTION_APPROVAL") {
+    return "waiting";
+  }
+  if (state === "QUALITY_FAILED") {
+    return "waiting";
+  }
+  return "skipped";
+}
+
+function retryDetail(taskExecution: TaskExecutionSession | null): string {
+  if (!taskExecution) {
+    return "No task attempt loaded";
+  }
+  const remaining = Math.max(taskExecution.max_attempts - taskExecution.current_attempt, 0);
+  if (taskExecution.state === "RETRY_LIMIT_REACHED") {
+    return `Attempt ${taskExecution.current_attempt} of ${taskExecution.max_attempts}; retry limit reached`;
+  }
+  return `Attempt ${taskExecution.current_attempt} of ${taskExecution.max_attempts}; ${remaining} remaining`;
+}
+
+function getMutationState({
+  diffPreview,
+  execution,
+  gitCommit,
+  rollback,
+  taskExecution,
+}: {
+  diffPreview: CoderDiffPreviewResponse | null;
+  execution: ExecutionApplyResponse | null;
+  gitCommit: GitCommitResponse | null;
+  rollback: ExecutionRollbackResponse | null;
+  taskExecution: TaskExecutionSession | null;
+}): { label: string; detail: string; status: ProgressState } {
+  if (gitCommit?.status === "COMMITTED") {
+    return {
+      label: "Verified changes committed",
+      detail: `Local commit ${gitCommit.commit_hash ?? "created"} recorded. No push was performed.`,
+      status: "complete",
+    };
+  }
+  if (rollback?.status === "ROLLED_BACK" || taskExecution?.state === "ROLLED_BACK") {
+    return {
+      label: "Execution rolled back",
+      detail: "Persisted snapshots restored the project state for this execution.",
+      status: "skipped",
+    };
+  }
+  if (execution?.status === "EXECUTED" || taskExecution?.apply_result?.status === "EXECUTED") {
+    return {
+      label: "Changes applied",
+      detail: "Backend confirmed project files were modified from the reviewed diff.",
+      status: "complete",
+    };
+  }
+  if (
+    execution?.status === "BLOCKED" ||
+    execution?.status === "REVIEW_STALE" ||
+    execution?.status === "PARTIALLY_FAILED_AND_ROLLED_BACK" ||
+    taskExecution?.state === "BLOCKED" ||
+    taskExecution?.state === "FAILED"
+  ) {
+    return {
+      label: "Execution failed",
+      detail: "No successful current mutation is confirmed. Review blockers before retrying.",
+      status: "blocked",
+    };
+  }
+  if (diffPreview || taskExecution?.diff_preview) {
+    return {
+      label: "Preview only - no project files modified",
+      detail: "A reviewed diff exists, but files will not change until explicit Apply.",
+      status: "waiting",
+    };
+  }
+  return {
+    label: "Preview only - no project files modified",
+    detail: "Execution review is read-only until a reviewed diff is explicitly applied.",
+    status: "waiting",
+  };
+}
+
+function getTaskMutationLabel(taskExecution: TaskExecutionSession): string {
+  return getMutationState({
+    diffPreview: taskExecution.diff_preview,
+    execution: taskExecution.apply_result,
+    gitCommit: null,
+    rollback: taskExecution.rollback_result,
+    taskExecution,
+  }).label;
+}
+
+function getTaskMutationDetail(taskExecution: TaskExecutionSession): string {
+  return getMutationState({
+    diffPreview: taskExecution.diff_preview,
+    execution: taskExecution.apply_result,
+    gitCommit: null,
+    rollback: taskExecution.rollback_result,
+    taskExecution,
+  }).detail;
+}
+
+function getTaskMutationStatus(taskExecution: TaskExecutionSession): ProgressState {
+  return getMutationState({
+    diffPreview: taskExecution.diff_preview,
+    execution: taskExecution.apply_result,
+    gitCommit: null,
+    rollback: taskExecution.rollback_result,
+    taskExecution,
+  }).status;
+}
+
+function getTaskActionReason(
+  taskExecution: TaskExecutionSession,
+  action: "apply" | "verify" | "rollback" | "retry",
+): string {
+  if (action === "apply") {
+    return taskExecution.state === "AWAITING_EXECUTION_APPROVAL"
+      ? ""
+      : "Apply waits for a prepared reviewed diff and explicit execution approval.";
+  }
+  if (action === "verify") {
+    return ["APPLIED", "QUALITY_FAILED", "QUALITY_INCOMPLETE"].includes(taskExecution.state)
+      ? ""
+      : "Verification waits for a successful Apply.";
+  }
+  if (action === "rollback") {
+    return taskExecution.mutation_execution_id && taskExecution.state !== "ROLLED_BACK"
+      ? ""
+      : "Rollback waits for an applied execution that has not already been rolled back.";
+  }
+  if (taskExecution.state !== "QUALITY_FAILED") {
+    return "Retry is available only after QUALITY_FAILED.";
+  }
+  if (taskExecution.current_attempt >= taskExecution.max_attempts) {
+    return "Retry limit reached.";
+  }
+  return "";
+}
+
+function getCommitEligibility(gitStatus: GitStatusResponse | null): string {
+  if (!gitStatus) {
+    return "Read Git status for a quality-passed execution to check commit eligibility.";
+  }
+  if (!gitStatus.is_git_repository) {
+    return "No Git repository detected for the selected workspace.";
+  }
+  if (!gitStatus.execution_id) {
+    return "Select an audited execution before committing.";
+  }
+  if (gitStatus.unexpected_changed_files.length > 0) {
+    return "Commit blocked until unexpected changed files are resolved.";
+  }
+  return "Eligible for explicit controlled commit; no push will be performed.";
+}
+
+function stateClassName(state: ProgressState): string {
+  if (state === "complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  }
+  if (state === "current") {
+    return "border-blue-200 bg-blue-50 text-blue-900";
+  }
+  if (state === "blocked" || state === "failed") {
+    return "border-red-200 bg-red-50 text-red-900";
+  }
+  if (state === "skipped") {
+    return "border-zinc-200 bg-zinc-100 text-zinc-600";
+  }
+  return "border-zinc-200 bg-white text-zinc-600";
 }
 
 function formatDate(value: string) {

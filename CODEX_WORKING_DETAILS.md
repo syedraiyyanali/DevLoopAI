@@ -2,16 +2,16 @@
 
 ## Last Updated
 
-Date: 2026-08-20
-Time: 21:02:38 +05:00
+Date: 2026-08-22
+Time: 12:47:07 +05:00
 Updated By: Codex
 
 ## Current Git State
 
 Branch: main
-Latest Commit: Step 40 better test selection and validation strategy
-Working Tree: clean after Step 40 feature commit
-Last Push: Step 40 checkpoint pushed to origin/main
+Latest Commit: Step 41 frontend polish and task progress UX
+Working Tree: clean after Step 41 feature commit
+Last Push: Step 41 checkpoint pushed to origin/main
 
 ## Current Sprint
 
@@ -19,17 +19,17 @@ Sprint: Sprint 1 - Controlled Single-Task Execution
 
 ## Current Step
 
-Step: Sprint 1 - Step 40: Better Test Selection and Validation Strategy
+Step: Sprint 1 - Step 41: Frontend Polish and Task Progress UX
 
 Status: COMPLETED
 
 ## Currently Working On
 
-Step 40 better test selection and validation strategy completed, verified, committed, and pushed.
+Step 41 frontend polish and task progress UX completed, verified, committed, and pushed.
 
 ## Current Goal
 
-Continue from the verified Step 40 checkpoint with Sprint 1 Step 41.
+Continue from the verified Step 41 checkpoint with Sprint 1 Step 42.
 
 ## What Has Been Completed
 
@@ -809,6 +809,27 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 40 frontend ESLint: PASS.
 - Step 40 frontend production build: PASS.
 - Step 40 route render smoke check: PASS; Next.js production route returned HTTP 200 on port `3105`.
+- Polished the frontend Execution Review panel for Step 41 without adding backend powers or changing execution safety rules.
+- Replaced the small execution rail with a compact full lifecycle rail covering Context, Planning, Review, Validation, Plan Approval, Preflight, Handoff, Dry Run, Diff Review, Execution Approval, Apply, Verification, Quality, Retry, Rollback, and Git Commit.
+- Added explicit non-color status labels for lifecycle states: complete, current, waiting, blocked, failed, and skipped.
+- Added a prominent file-mutation banner that distinguishes:
+  - `Preview only - no project files modified`
+  - `Changes applied`
+  - `Execution failed`
+  - `Execution rolled back`
+  - `Verified changes committed`
+- Added separate Plan Approval and Execution Approval boundary cards so plan approval is not visually confused with permission to mutate files.
+- Improved controlled single-task progress UX with state-aware stages, task mutation banner, action-disabled reasons, and inline task verification run history.
+- Improved attempt UX by keeping attempt lineage visible, showing active attempt counts, remaining attempts, retry limit messaging, parent execution IDs, diff review IDs, and failure context hashes.
+- Improved verification presentation by showing Step 40 verification-plan checks with required/skipped tier, deterministic reason, latest run status, duration, and rollback recommendation.
+- Improved Quality Gate presentation through the existing deterministic quality card and lifecycle rail emphasis for `QUALITY_PASSED`, `QUALITY_FAILED`, `QUALITY_INCOMPLETE`, `ROLLED_BACK`, and `BLOCKED`.
+- Improved Git presentation with repository detection, commit eligibility messaging, audited/unexpected changed-file context, explicit controlled commit status, commit hash/message display, and no push control.
+- Improved loading, empty, and blocked states for no workflow selected, no task session loaded, disabled pipeline actions, no execution history, and missing Git context.
+- Step 41 frontend ESLint: PASS.
+- Step 41 frontend production build: PASS.
+- Step 41 full backend pytest regression: PASS, `234 passed`.
+- Step 41 route render smoke: HTTP 200 returned on ports `3106`, `3107`, and `3108`; PowerShell/Node cleanup wrappers returned non-zero after successful HTTP 200 due Windows child-process cleanup behavior, and all smoke-test listener processes were cleaned up.
+- Step 41 Python compile check: SKIPPED because no backend Python files changed.
 
 ## Known Problems
 
@@ -834,7 +855,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 37 model reliability and structured-output recovery is verified locally and ready to commit/push.
 - Step 38 safe Git diff/status integration is verified, committed, and pushed.
 - Step 39 controlled Git commit workflow is verified, committed, and pushed.
-- Step 40 better test selection and validation strategy is verified locally and ready to commit/push.
+- Step 40 better test selection and validation strategy is verified, committed, and pushed.
+- Step 41 frontend polish and task progress UX is verified locally and ready to commit/push.
 - Initial Step 29 Ollama status-check PowerShell command had a pipeline parse error; corrected the command and the real generation retry passed.
 - Step 29 does not add a generic terminal, raw command API, automatic rollback, package installation, Git operations, or deployment commands.
 - Step 30 does not add automatic apply, automatic rollback, arbitrary terminal input, dependency installation, Git commit/push controls, deployment controls, or autonomous execution.
@@ -905,6 +927,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - Step 39 fixture work exposed that Quality Gate requires persisted per-file execution audit rows as well as response JSON; tests now record both, matching real mutation behavior.
 - Step 40 fixed volatile handoff comparison around regenerated preflight file metadata; stable approval/allowlist fields remain canonical while exact reviewed file content is still protected by deterministic hashes.
 - Step 40 fixed Windows same-instant approval/preflight mtime false positives with a narrow timestamp tolerance and retained stale-content blocking at apply time.
+- Step 41 kept all mutation, rollback, verification, retry, and Git commit actions explicit; no automatic apply, rollback, retry mutation, commit, push, arbitrary shell, dependency install, or deployment controls were added.
 
 ## Git Commits From Recent Work
 
@@ -928,7 +951,8 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 - 05cdb1f - feat: add model structured-output reliability
 - c9a5053 - feat: add read-only git status integration
 - 1b26a16 - feat: add controlled git commit workflow
-- Step 40 - pending commit: feat: add verification selection policy
+- e7d4c8b - feat: add verification selection policy
+- Step 41 - pending commit: feat: polish execution progress UX
 - 8568635 - feat: add planning approval gate
 - 0e9ee10 - feat: add validator agent foundation
 - c450faa - feat: integrate validator into planning workflow
@@ -953,47 +977,7 @@ The frontend must communicate with FastAPI. The frontend must not communicate di
 
 ## Files Changed in Current Work
 
-- `backend/app/api/v1/endpoints/task_execution.py`
-- `backend/app/api/v1/endpoints/autonomous_task.py`
-- `backend/app/api/v1/endpoints/coder.py`
-- `backend/app/api/v1/endpoints/git_commit.py`
-- `backend/app/api/v1/endpoints/git_status.py`
-- `backend/app/api/v1/endpoints/execution_verification.py`
-- `backend/app/api/v1/router.py`
-- `backend/app/agents/coder.py`
-- `backend/app/models/autonomous_task.py`
-- `backend/app/models/context_selection.py`
-- `backend/app/models/coder.py`
-- `backend/app/models/execution_mutation.py`
-- `backend/app/models/git_commit.py`
-- `backend/app/models/execution_quality.py`
-- `backend/app/models/execution_verification_plan.py`
-- `backend/app/models/task_execution.py`
-- `backend/app/services/autonomous_task.py`
-- `backend/app/services/autonomous_task_store.py`
-- `backend/app/services/context_selection.py`
-- `backend/app/services/model_reliability.py`
-- `backend/app/services/git_commit.py`
-- `backend/app/services/git_status.py`
-- `backend/app/services/execution_preflight.py`
-- `backend/app/services/execution_quality.py`
-- `backend/app/services/execution_verification.py`
-- `backend/app/services/execution_verification_policy.py`
-- `backend/app/services/execution_mutation.py`
-- `backend/app/services/task_execution.py`
-- `backend/tests/test_autonomous_task_api.py`
-- `backend/tests/test_context_selection.py`
-- `backend/tests/test_coder_dry_run_api.py`
-- `backend/tests/test_model_reliability.py`
-- `backend/tests/test_git_commit_api.py`
-- `backend/tests/test_git_status_api.py`
-- `backend/tests/test_execution_verification_plan_api.py`
-- `backend/tests/test_planner_api.py`
-- `backend/tests/test_reviewer_api.py`
-- `backend/tests/test_validator_api.py`
-- `backend/tests/test_task_execution_api.py`
 - `frontend/components/execution-review-panel.tsx`
-- `frontend/lib/api-client.ts`
 - `CODEX_WORKING_DETAILS.md`
 
 ## Decisions Waiting for User
@@ -1006,14 +990,14 @@ None.
 
 ## Next Planned Task
 
-Recommended next task: Sprint 1 Step 41 - Commit History and Quality-Aware Release Notes.
+Recommended next task: Sprint 1 Step 42 - Failure Recovery and Resume Handling.
 
 ## Next Files Likely to Change
 
-- read-only committed execution audit summaries
-- quality-aware local release/checkpoint notes
-- include workflow, execution, verification, quality, and commit audit references
-- keep Git push/deploy/manual publishing outside this step unless explicitly requested
+- recover interrupted frontend/backend execution-review sessions from persisted IDs
+- resume partially prepared/applied/verified task sessions after reload
+- improve stale, blocked, and failed action recovery messages
+- preserve explicit approval boundaries during resume
 
 ## Do Not Forget
 
