@@ -21,9 +21,9 @@ type ChatStatus =
   | { status: "error"; message: string };
 
 const exampleMessages = [
-  "Confirm DevLoopAI is connected.",
-  "Explain what this backend can do so far.",
-  "Give me a tiny HTML button example.",
+  "What can you help me build?",
+  "Check if DevLoopAI is connected.",
+  "Write a tiny HTML button.",
 ];
 
 export default function ChatPanel() {
@@ -172,17 +172,14 @@ export default function ChatPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="mx-auto flex w-full max-w-3xl flex-col">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-zinc-950">Chat</h2>
-          <p className="text-sm leading-6 text-zinc-600">
-            Messages go through FastAPI before reaching Ollama.
-          </p>
+          <h2 className="text-sm font-medium text-zinc-500">Chat</h2>
         </div>
 
         <button
-          className="inline-flex h-9 w-fit items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+          className="inline-flex h-9 w-fit items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:hidden"
           disabled={messages.length === 0 || isSending}
           onClick={clearConversation}
           type="button"
@@ -191,14 +188,21 @@ export default function ChatPanel() {
         </button>
       </div>
 
-      <div className="mt-5 min-h-64 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <div className="mt-4 min-h-[360px]">
         {messages.length === 0 ? (
-          <div className="flex min-h-56 flex-col justify-center gap-3 text-sm text-zinc-600">
-            <p className="font-medium text-zinc-800">No messages yet.</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="flex min-h-[360px] flex-col items-center justify-center gap-6 text-center">
+            <div>
+              <p className="text-2xl font-semibold text-zinc-950 sm:text-3xl">
+                What do you want to build?
+              </p>
+              <p className="mt-3 text-sm leading-6 text-zinc-500">
+                Ask DevLoopAI a question or start with one of these prompts.
+              </p>
+            </div>
+            <div className="grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3">
               {exampleMessages.map((exampleMessage) => (
                 <button
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-left text-sm text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-400"
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left text-sm text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
                   disabled={isSending}
                   key={exampleMessage}
                   onClick={() => selectExample(exampleMessage)}
@@ -210,7 +214,7 @@ export default function ChatPanel() {
             </div>
           </div>
         ) : (
-          <ol className="flex flex-col gap-3">
+          <ol className="flex flex-col gap-5">
             {messages.map((chatMessage) => (
               <li
                 className={`flex ${
@@ -221,14 +225,14 @@ export default function ChatPanel() {
                 key={chatMessage.id}
               >
                 <div
-                  className={`max-w-3xl rounded-lg border p-4 ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                     chatMessage.role === "user"
-                      ? "border-zinc-900 bg-zinc-950 text-white"
-                      : "border-zinc-200 bg-white text-zinc-950"
+                      ? "bg-zinc-950 text-white"
+                      : "bg-zinc-100 text-zinc-950"
                   }`}
                 >
                   <p
-                    className={`text-xs font-medium uppercase ${
+                    className={`text-xs font-medium ${
                       chatMessage.role === "user"
                         ? "text-zinc-300"
                         : "text-zinc-500"
@@ -247,8 +251,8 @@ export default function ChatPanel() {
 
             {isSending && messages[messages.length - 1]?.content === "" ? (
               <li className="flex justify-start">
-                <div className="rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
-                  Connecting to stream...
+                <div className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-600">
+                  Thinking...
                 </div>
               </li>
             ) : null}
@@ -257,22 +261,25 @@ export default function ChatPanel() {
       </div>
 
       {chatStatus.status === "error" ? (
-        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm leading-6 text-amber-900">
             {chatStatus.message}
           </p>
         </div>
       ) : null}
 
-      <form className="mt-5 flex flex-col gap-3" onSubmit={handleSubmit}>
+      <form
+        className="mt-5 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm"
+        onSubmit={handleSubmit}
+      >
         <label className="sr-only" htmlFor="chat-message">
           Message
         </label>
         <textarea
           id="chat-message"
-          className="min-h-28 resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none transition focus:border-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-100"
+          className="min-h-24 w-full resize-none rounded-xl border-0 bg-white px-3 py-3 text-sm leading-6 text-zinc-950 outline-none disabled:cursor-not-allowed disabled:bg-zinc-100"
           disabled={isSending}
-          placeholder="Ask DevLoopAI something small..."
+          placeholder="Message DevLoopAI..."
           value={message}
           onChange={(event) => {
             setMessage(event.target.value);
@@ -282,12 +289,10 @@ export default function ChatPanel() {
           }}
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-zinc-500">
-            Streaming chat is active; non-streaming fallback remains available.
-          </p>
+        <div className="flex items-center justify-between gap-3 px-2 pb-1">
+          <p className="text-xs text-zinc-400">Local Ollama via FastAPI</p>
           <button
-            className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+            className="inline-flex h-9 w-fit items-center justify-center rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             disabled={!canSend}
             type="submit"
           >
